@@ -1,0 +1,19 @@
+[keepassxc]
+# Path to your .kdbx database
+database_path = "C:/Users/Username/Documents/Passwords.kdbx"
+
+# Optional: path to key file (leave empty if not used)
+keyfile_path = ""
+
+# Optional: YubiKey challenge-response slot (e.g. "2")
+yubikey_slot = ""
+
+# CLI binary name or absolute path
+cli_binary = "keepassxc-cli"
+
+# Group names to exclude from sync
+excluded_groups = ["Recycle Bin", "Archive"]
+
+[token2]
+# CLI binary name or absolute path
+cli_binary = "token2-otp-cli"
