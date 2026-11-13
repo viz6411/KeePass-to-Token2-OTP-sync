@@ -62,6 +62,26 @@ def test_capacity_limit_300():
     assert result.is_capacity_exceeded is True
 
 
+def test_totp_code_verification():
+    t_fixed = 1700000000
+    secret_kpxc = "JBSWY3DPEHPK3PXP"
+    current_code = calculate_totp(secret_kpxc, timestamp=t_fixed)
+
+    # When token returns matching code, no update needed
+    kpxc = [TOTPEntry(issuer="Service", account="user1", secret=secret_kpxc)]
+    token_matching = [Token2Profile(slot=1, issuer="Service", account="user1", current_otp=current_code)]
+    res1 = compute_diff(kpxc, token_matching, current_time=t_fixed)
+    assert len(res1.to_update) == 0
+    assert len(res1.to_add) == 0
+
+    # When secret on KeePassXC was rotated, OTP codes differ -> detected as to_update
+    token_rotated = [Token2Profile(slot=1, issuer="Service", account="user1", current_otp="999888")]
+    res2 = compute_diff(kpxc, token_rotated, current_time=t_fixed)
+    assert len(res2.to_update) == 1
+    assert res2.to_update[0][0].issuer == "Service"
+    assert res2.to_update[0][1].slot == 1
+
+
 def test_duplicate_entries_detection():
     kpxc = [
         TOTPEntry(issuer="GitHub", account="alice", secret="JBSWY3DPEHPK3PXP"),

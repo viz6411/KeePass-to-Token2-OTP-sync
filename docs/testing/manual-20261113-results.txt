@@ -1,0 +1,69 @@
+=== PRE-RELEASE VERIFICATION EVIDENCE LOG ===
+Timestamp: 2026-11-13T17:34:17Z
+Environment: Linux 6.6.87.2-microsoft-standard-WSL2 | Python Python 3.14.4
+
+--- 1. SEC-01: Zero-Disk Verification ---
+=== SEC-01 Zero-Disk-Footprint Invariant Verification ===
+[1] Checking filesystem state before KeePassXC operations...
+Found initial XML files in /tmp: 0
+[2] Running Zero-Disk KeePassXC pipe parsing test...
+Successfully parsed KeePassXC XML in RAM via pure memory buffer.
+[3] Checking filesystem for any leaked files created after marker...
+Zero-Disk Verification PASSED: 0 disk files created, 0 leaks detected.
+Status: PASS (SEC-01 Verified)
+
+--- 2. Automated Test Suite Execution (pytest) ---
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+testpaths: tests
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 22 items
+
+tests/test_chaos.py::test_corrupted_xml_handling PASSED                  [  4%]
+tests/test_chaos.py::test_malformed_json_handling PASSED                 [  9%]
+tests/test_chaos.py::test_boundary_and_malformed_inputs PASSED           [ 13%]
+tests/test_chaos.py::test_usb_disconnect_simulation PASSED               [ 18%]
+tests/test_chaos.py::test_immediate_abort_on_auth_failure PASSED         [ 22%]
+tests/test_cli.py::test_find_free_slots PASSED                           [ 27%]
+tests/test_cli.py::test_sync_modes PASSED                                [ 31%]
+tests/test_cli.py::test_capacity_exceeded_guard PASSED                   [ 36%]
+tests/test_diff.py::test_calculate_totp_rfc_test_vectors PASSED          [ 40%]
+tests/test_diff.py::test_diff_categories PASSED                          [ 45%]
+tests/test_diff.py::test_capacity_limit_300 PASSED                       [ 50%]
+tests/test_diff.py::test_totp_code_verification PASSED                   [ 54%]
+tests/test_diff.py::test_duplicate_entries_detection PASSED              [ 59%]
+tests/test_kpxc.py::test_otpauth_normalization PASSED                    [ 63%]
+tests/test_kpxc.py::test_recycle_bin_ignored PASSED                      [ 68%]
+tests/test_kpxc.py::test_kpxc_cli_pipe_parsing PASSED                    [ 72%]
+tests/test_security.py::test_buffer_zeroing PASSED                       [ 77%]
+tests/test_security.py::test_secure_buffer_context_manager PASSED        [ 81%]
+tests/test_security.py::test_argv_leak_prevention PASSED                 [ 86%]
+tests/test_token2.py::test_parse_entries_json PASSED                     [ 90%]
+tests/test_token2.py::test_pin_immediate_abort PASSED                    [ 95%]
+tests/test_token2.py::test_write_delete_commands PASSED                  [100%]
+
+============================== 22 passed in 0.10s ==============================
+
+--- 3. CLI Interactive & Help Verification ---
+usage: t2-kpxc-sync [-h] [--config CONFIG] [--db KDBX] [--key-file KEYFILE]
+                    [--yubikey YUBIKEY] [--dry-run]
+                    [--mode {add_only,add_update,full_sync,cancel}] [-y]
+
+Zero-disk-footprint KeePassXC to Token2 PIN+ R3.3 TOTP synchronizer
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Path to config.toml
+  --db, --kdbx KDBX     Path to KeePassXC .kdbx file
+  --key-file KEYFILE    Path to KeePassXC key file
+  --yubikey YUBIKEY     YubiKey slot:serial
+  --dry-run             Only show differences, do not write to token
+  --mode {add_only,add_update,full_sync,cancel}
+                        Non-interactive execution mode
+  -y, --yes             Confirm deletions without prompting
+
+=== ALL EVIDENCE RECORDED SUCCESSFULLY ===
