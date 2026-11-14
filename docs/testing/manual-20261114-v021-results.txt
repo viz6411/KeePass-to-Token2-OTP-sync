@@ -1,0 +1,57 @@
+================================================================================
+PRE-RELEASE MANUAL STAND VERIFICATION LOG — RELEASE v0.2.1
+Target: Token2 PIN+ R3.3 APDU Extended Lc Framing Bugfix (SW 0x6FFB Resolution)
+Date: 2026-11-14
+Test Environment: Linux (x86_64), Python 3.14.4, pytest 9.1.1
+================================================================================
+
+[CHECK 1: FIX-01 Extended Lc Framing for Empty Payload APDUs]
+Command: python3 -m pytest tests/test_token2_protocol.py::test_apdu_extended_lc_for_empty_payload
+Output:
+tests/test_token2_protocol.py::test_apdu_extended_lc_for_empty_payload PASSED [100%]
+Verification:
+- build_get_ecdh_pubkey_apdu() returned exact 7 bytes: 80C50100000000
+- erase_all build_write_seed_apdu(b"") returned exact 7 bytes: 80C50502000000
+- Extended Lc 0x000000 framing strictly enforced.
+Result: PASS
+
+[CHECK 2: FIX-02 Simulation of Hardware Status Word 0x6FFB on Short APDU]
+Command: python3 -m pytest tests/e2e/test_tier2_boundaries.py::test_t2_token2_short_apdu_rejected_with_6ffb
+Output:
+tests/e2e/test_tier2_boundaries.py::test_t2_token2_short_apdu_rejected_with_6ffb PASSED [100%]
+Verification:
+- Sending 4-byte short APDU (80 C5 01 00) to USB-HID returned SW 0x6FFB.
+- Sending 7-byte extended APDU (80 C5 01 00 00 00 00) to USB-HID returned SW 0x9000 with 64-byte public key.
+Result: PASS
+
+[CHECK 3: FIX-03 End-to-End TOTP Write with Extended Lc Framing]
+Command: python3 -m pytest tests/e2e/test_tier1_features.py::test_t1_token2_write_seed_extended_lc
+Output:
+tests/e2e/test_tier1_features.py::test_t1_token2_write_seed_extended_lc PASSED [100%]
+Verification:
+- Provisioned "OneKey Card" (viz6411@gmail.com) via Token2DirectClient against hardware-fidelity simulation.
+- get_token_public_key() executed with Extended Lc without triggering 0x6FFB error.
+- Profile successfully read back from simulated NVRAM.
+Result: PASS
+
+[CHECK 4: Complete Regression Test Suite]
+Command: python3 -m pytest
+Output: 397 passed in 74.08s
+Result: PASS (0 failures, 0 regressions)
+
+[CHECK 5: Zero-Disk Footprint Invariant]
+Command: bash scripts/manual/verify_zero_disk.sh
+Output:
+=== SEC-01 Zero-Disk-Footprint Invariant Verification ===
+Successfully parsed KeePassXC XML in RAM via pure memory buffer.
+Zero-Disk Verification PASSED: 0 disk files created, 0 leaks detected.
+Result: PASS
+
+[CHECK 6: Archify Architecture Map Invariant]
+Command: node /home/viz/.gemini/config/skills/archify/bin/archify.mjs deliver architecture docs/architecture.json docs/architecture.html --quality showcase
+Output: 9/9 artifact checks; composition showcase: pass; sha256 b1931cdf53bf
+Result: PASS
+
+================================================================================
+RELEASE STAND VERDICT: PASS (All checks verified with machine evidence)
+================================================================================

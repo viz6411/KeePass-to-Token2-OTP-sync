@@ -15,12 +15,14 @@ from ..security import scrub_bytes
 from .crypto import encrypt_payload_ecdh
 from .exceptions import Token2Error, Token2PINError
 from .protocol import (
+    CMD_GET_ECDH_PUBKEY,
     SW_AUTH_FAILED,
     SW_BUTTON_TIMEOUT,
     SW_EMPTY_OR_NOT_FOUND,
     SW_ENTRY_NOT_FOUND,
     SW_MEMORY_FULL,
     SW_OK,
+    SW_SHORT_FORM_REJECTED,
     build_enum_codes_apdu,
     build_enum_codes_continue_apdu,
     build_get_ecdh_pubkey_apdu,
@@ -107,6 +109,12 @@ class Token2DirectClient:
         apdu = build_get_ecdh_pubkey_apdu()
         resp = self.transport.send_apdu(apdu)
         data, sw = parse_status_word(resp)
+
+        # Resilient fallback: if 0x6FFB occurs (firmware expected alternate case-2 APDU with Le=0x00)
+        if sw == SW_SHORT_FORM_REJECTED:
+            alt_apdu = CMD_GET_ECDH_PUBKEY + b"\x00"
+            resp = self.transport.send_apdu(alt_apdu)
+            data, sw = parse_status_word(resp)
 
         if sw == SW_AUTH_FAILED:
             raise Token2PINError("Token2 authentication failed (PIN required or incorrect PIN, status word 0x6982)")

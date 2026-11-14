@@ -31,6 +31,7 @@ SW_MEMORY_FULL: int = 0x6A84
 SW_NOT_SUPPORTED: int = 0x6A86
 SW_AUTH_FAILED: int = 0x6982
 SW_BUTTON_TIMEOUT: int = 0x6FF9
+SW_SHORT_FORM_REJECTED: int = 0x6FFB
 
 # Algorithm byte constants
 ALGO_SHA1: int = 0xC1
@@ -67,6 +68,9 @@ def validate_apdu_safety(apdu: bytes) -> None:
 def build_apdu(cla_ins_p1_p2: bytes, payload: bytes = b"") -> bytes:
     """Builds an extended ISO 7816-4 APDU frame [CLA INS P1 P2 (00 Lc_hi Lc_lo Payload)].
 
+    Note: Token2 USB-HID framing strictly requires extended Lc [00 Lc_hi Lc_lo] on all commands,
+    including bodyless commands (00 00 00). Without this, PIN+ hardware rejects the APDU with SW 0x6FFB.
+
     Args:
         cla_ins_p1_p2: 4-byte APDU header.
         payload: Optional payload bytes.
@@ -75,9 +79,6 @@ def build_apdu(cla_ins_p1_p2: bytes, payload: bytes = b"") -> bytes:
         Encoded APDU bytes.
     """
     validate_apdu_safety(cla_ins_p1_p2)
-    if not payload:
-        return cla_ins_p1_p2
-
     # Extended Lc: 0x00 followed by 2 bytes big-endian length
     extended_lc = b"\x00" + len(payload).to_bytes(2, "big")
     return cla_ins_p1_p2 + extended_lc + payload

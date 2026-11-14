@@ -214,6 +214,9 @@ class SimulatedToken2HIDDevice:
 
         # 2. GET_ECDH_PUBKEY (80 C5 01 00)
         if ins == 0xC5 and p1 == 0x01 and p2 == 0x00:
+            # Token2 PIN+ hardware over USB-HID strictly rejects short 4-byte APDU without extended Lc with 0x6FFB
+            if len(apdu) == 4:
+                return b"\x6F\xFB"
             return self.hw_pub_bytes + b"\x90\x00"
 
         # 3. READ_OTP_PIN_FLAG (80 C5 05 04)

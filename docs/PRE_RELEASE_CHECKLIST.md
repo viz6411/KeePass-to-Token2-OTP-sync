@@ -146,3 +146,18 @@
 - [x] **CHAOS-06**: Устойчивость TUI к спаму нажатий (rapid enter / double-submit).
   - *Expected*: Быстрый ввод пустых строк или некорректных опций меню не нарушает работу TUI и не повреждает конфигурационный файл.
   - *Evidence*: `tests/test_tui_stress.py::test_main_menu_invalid_choices_and_clean_exit`
+
+---
+
+## 9. Верификация фикса v0.2.1 (APDU Extended Lc Framing & SW 0x6FFB)
+- [x] **FIX-01**: Формирование Extended Lc (`00 00 00`) в APDU при пустом теле (`CMD_GET_ECDH_PUBKEY`, `erase_all`).
+  - *Expected*: `build_get_ecdh_pubkey_apdu()` возвращает ровно 7 байт `80 C5 01 00 00 00 00`.
+  - *Evidence*: `tests/test_token2_protocol.py::test_apdu_extended_lc_for_empty_payload`
+- [x] **FIX-02**: Симуляция аппаратного ответа 0x6FFB на усеченные 4-байтные APDU.
+  - *Expected*: `SimulatedToken2HIDDevice` возвращает статус `0x6FFB` при получении усеченного 4-байтного `80 C5 01 00` и `0x9000` при получении `80 C5 01 00 00 00 00`.
+  - *Evidence*: `tests/e2e/test_tier2_boundaries.py::test_t2_token2_short_apdu_rejected_with_6ffb`
+- [x] **FIX-03**: Успешная запись TOTP-профиля на токен со встроенным протоколом и extended Lc.
+  - *Expected*: `write_entry()` успешно получает 64-байтный ECDH pubkey, выполняет обмен и записывает профиль без ошибки 0x6FFB.
+  - *Evidence*: `tests/e2e/test_tier1_features.py::test_t1_token2_write_seed_extended_lc`
+  - *Manual Evidence*: [manual-20261114-v021-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v021-results.txt)
+

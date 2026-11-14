@@ -552,3 +552,28 @@ def test_mock_transport_unsupported_apdu():
     assert sw == 0x6D00
     mock.close()
 
+
+def test_apdu_extended_lc_for_empty_payload():
+    """Tests that build_apdu formats extended Lc (00 00 00) for bodyless APDUs to avoid 0x6FFB."""
+    from t2_kpxc_sync.token2 import (
+        CMD_GET_ECDH_PUBKEY,
+        CMD_WRITE_SEED,
+        SW_SHORT_FORM_REJECTED,
+        build_get_ecdh_pubkey_apdu,
+        build_write_seed_apdu,
+    )
+
+    # 1. build_get_ecdh_pubkey_apdu must return exactly 7 bytes with extended Lc = 0x0000
+    apdu_pubkey = build_get_ecdh_pubkey_apdu()
+    assert len(apdu_pubkey) == 7
+    assert apdu_pubkey == CMD_GET_ECDH_PUBKEY + b"\x00\x00\x00"
+
+    # 2. erase_all (CMD_WRITE_SEED with empty payload) must return 7 bytes with extended Lc
+    apdu_erase = build_write_seed_apdu(b"")
+    assert len(apdu_erase) == 7
+    assert apdu_erase == CMD_WRITE_SEED + b"\x00\x00\x00"
+
+    # 3. SW_SHORT_FORM_REJECTED is defined as 0x6FFB
+    assert SW_SHORT_FORM_REJECTED == 0x6FFB
+
+

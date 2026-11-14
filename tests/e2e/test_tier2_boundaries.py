@@ -294,6 +294,29 @@ def test_t2_token2_touch_button_polling(mock_token2_hid: SimulatedToken2HIDDevic
         client.close()
 
 
+def test_t2_token2_short_apdu_rejected_with_6ffb(mock_token2_hid: SimulatedToken2HIDDevice):
+    """Verifies that 4-byte short APDU without extended Lc returns 0x6FFB, while extended APDU succeeds."""
+    from t2_kpxc_sync.token2 import HIDTransport, parse_status_word
+
+    transport = HIDTransport()
+    transport.open()
+    try:
+        # 1. 4-byte short APDU without extended Lc is rejected by hardware simulation with SW 0x6FFB
+        short_apdu = bytes.fromhex("80C50100")
+        resp_short = transport.send_apdu(short_apdu)
+        _, sw_short = parse_status_word(resp_short)
+        assert sw_short == 0x6FFB
+
+        # 2. 7-byte extended APDU with Lc 00 00 00 succeeds with SW 0x9000
+        extended_apdu = bytes.fromhex("80C50100000000")
+        resp_ext = transport.send_apdu(extended_apdu)
+        data_ext, sw_ext = parse_status_word(resp_ext)
+        assert sw_ext == 0x9000
+        assert len(data_ext) == 64
+    finally:
+        transport.close()
+
+
 # ============================================================================
 # 3. TUI & CLI Boundaries
 # ============================================================================

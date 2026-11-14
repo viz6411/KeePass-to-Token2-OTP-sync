@@ -260,6 +260,28 @@ def test_t1_token2_write_seed(mock_token2_hid: SimulatedToken2HIDDevice):
         assert ("Cloudflare", "ops") in mock_token2_hid.entries
 
 
+def test_t1_token2_write_seed_extended_lc(mock_token2_hid: SimulatedToken2HIDDevice):
+    """Verifies write_entry succeeds against simulation enforcing 0x6FFB on 4-byte APDUs."""
+    client = Token2DirectClient()
+    client.open()
+    try:
+        # write_entry executes get_token_public_key() which sends 80 C5 01 00 00 00 00
+        client.write_entry(
+            issuer="OneKey Card",
+            account="viz6411@gmail.com",
+            secret="JBSWY3DPEHPK3PXP",
+            algorithm="SHA1",
+            digits=6,
+            period=30,
+        )
+        assert ("OneKey Card", "viz6411@gmail.com") in mock_token2_hid.entries
+        profiles = client.list_entries()
+        assert any(p.issuer == "OneKey Card" and p.account == "viz6411@gmail.com" for p in profiles)
+    finally:
+        client.close()
+
+
+
 def test_t1_token2_delete_entry(mock_token2_hid: SimulatedToken2HIDDevice):
     """Verifies profile deletion with zero-length seed APDU."""
     with Token2Adapter(backend="direct") as adapter:

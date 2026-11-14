@@ -44,6 +44,7 @@ from .protocol import (
     SW_MEMORY_FULL,
     SW_NOT_SUPPORTED,
     SW_OK,
+    SW_SHORT_FORM_REJECTED,
     Token2ProtocolError,
     build_apdu,
     build_enum_codes_apdu,
