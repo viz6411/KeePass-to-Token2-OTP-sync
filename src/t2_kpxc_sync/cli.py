@@ -20,6 +20,7 @@ from .tui import (
     apply_sync,
     display_diff_table,
     find_free_slots,
+    prompt_entry_format,
     run_interactive_menu,
     run_main_menu,
     run_onboarding_wizard,
@@ -32,6 +33,7 @@ __all__ = [
     "display_diff_table",
     "find_free_slots",
     "apply_sync",
+    "prompt_entry_format",
     "run_interactive_menu",
     "run_onboarding_wizard",
     "run_main_menu",
@@ -68,6 +70,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Non-interactive execution mode",
     )
     parser.add_argument("-y", "--yes", action="store_true", help="Confirm deletions without prompting")
+    parser.add_argument(
+        "--button-required",
+        dest="button_required",
+        action="store_true",
+        default=None,
+        help="Require physical button press/touch on Token2 token to display code",
+    )
     parser.add_argument("--tui", action="store_true", help="Launch interactive TUI management interface")
 
     args = parser.parse_args(argv)
@@ -173,6 +182,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         mode = args.mode or run_interactive_menu(con=console)
         confirm_delete = not args.yes
 
+        # Determine TOTP entry format (prompt if interactive, else CLI flag or config)
+        if args.button_required is not None:
+            btn_flag = 1 if args.button_required else 0
+        elif args.mode is not None:
+            btn_flag = 1 if cfg.token2.button_required else 0
+        else:
+            btn_flag = prompt_entry_format(default_button_required=cfg.token2.button_required, con=console)
+
         try:
             apply_sync(
                 adapter=adapter,
@@ -181,6 +198,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 mode=mode,
                 confirm_delete=confirm_delete,
                 con=console,
+                btn_flag=btn_flag,
             )
         finally:
             adapter.close()

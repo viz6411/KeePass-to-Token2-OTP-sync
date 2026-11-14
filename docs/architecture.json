@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "KeePassXC to Token2 PIN+ R3.3 Sync — Архитектура v0.2.0",
+    "title": "KeePassXC to Token2 PIN+ R3.3 Sync — Архитектура v0.3.0",
     "quality_profile": "showcase",
     "views": [
       {

@@ -43,9 +43,10 @@ def build_write_command(
     algorithm: str = "SHA1",
     digits: int = 6,
     period: int = 30,
+    button_required: bool = False,
 ) -> list[str]:
     """Builds CLI command to write a TOTP profile to a specific slot."""
-    return [
+    cmd = [
         cli_binary,
         "write_entry",
         "--slot",
@@ -63,6 +64,9 @@ def build_write_command(
         "--period",
         str(period),
     ]
+    if button_required:
+        cmd.append("--button-required")
+    return cmd
 
 
 def build_delete_command(cli_binary: str, slot: int) -> list[str]:
@@ -215,7 +219,7 @@ class Token2CLIAdapter:
         output = self._execute(cmd)
         return parse_entries_json(output)
 
-    def write_entry(self, slot: int, entry: TOTPEntry) -> None:
+    def write_entry(self, slot: int, entry: TOTPEntry, btn_flag: int = 0) -> None:
         """Writes or updates a TOTP profile at specified slot."""
         cmd = build_write_command(
             cli_binary=self.cli_binary,
@@ -226,6 +230,7 @@ class Token2CLIAdapter:
             algorithm=entry.algorithm,
             digits=entry.digits,
             period=entry.period,
+            button_required=(btn_flag == 1),
         )
         self._execute(cmd)
 
@@ -327,7 +332,7 @@ class Token2Adapter:
         self.open()
         return self.get_all()
 
-    def write_entry(self, slot: int, entry: TOTPEntry) -> None:
+    def write_entry(self, slot: int, entry: TOTPEntry, btn_flag: int = 0) -> None:
         """Writes or updates a TOTP profile at specified slot."""
         if self._direct_client is not None:
             try:
@@ -338,6 +343,7 @@ class Token2Adapter:
                     algorithm=entry.algorithm,
                     digits=entry.digits,
                     period=entry.period,
+                    btn_flag=btn_flag,
                 )
                 self._slot_map[slot] = (entry.issuer, entry.account)
                 return
@@ -345,11 +351,11 @@ class Token2Adapter:
                 raise Token2Error(f"Direct Token2 write error: {err}") from err
 
         if self._cli_adapter is not None:
-            self._cli_adapter.write_entry(slot, entry)
+            self._cli_adapter.write_entry(slot, entry, btn_flag=btn_flag)
             return
 
         self.open()
-        self.write_entry(slot, entry)
+        self.write_entry(slot, entry, btn_flag=btn_flag)
 
     def delete_entry(self, slot: int) -> None:
         """Deletes a profile by slot index."""

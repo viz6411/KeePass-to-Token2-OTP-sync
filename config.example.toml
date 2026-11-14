@@ -15,5 +15,8 @@ cli_binary = "keepassxc-cli"
 excluded_groups = ["Recycle Bin", "Archive"]
 
 [token2]
-# CLI binary name or absolute path
+# CLI binary name or absolute path (legacy fallback)
 cli_binary = "token2-otp-cli"
+
+# Require touch/button press on hardware token to display OTP code (false = standard automatic, true = touch required)
+button_required = false

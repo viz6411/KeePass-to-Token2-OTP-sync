@@ -39,6 +39,7 @@ class Token2Profile:
     digits: int = 6
     period: int = 30
     current_otp: Optional[str] = None
+    btn_flag: int = 0
 
     @property
     def canonical_key(self) -> tuple[str, str]:

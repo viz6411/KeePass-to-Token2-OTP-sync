@@ -1,0 +1,73 @@
+================================================================================
+PRE-RELEASE MANUAL STAND VERIFICATION LOG — RELEASE v0.3.0
+================================================================================
+Timestamp: 2026-11-14T13:30:00+04:00
+Environment: Linux (Ubuntu x86_64), Python 3.14.4, pytest-9.1.1
+Commit / Tag Target: v0.3.0
+
+--------------------------------------------------------------------------------
+FEATURE SUMMARY: TOTP ENTRY FORMAT SELECTION (STANDARD VS TOUCH REQUIRED)
+--------------------------------------------------------------------------------
+1. Interactive prompt during sync workflow:
+   - Called on the final step after selecting sync mode (Add Only, Add & Update, Full Sync)
+     and immediately before executing write operations (`apply_sync`).
+   - Prompt choices:
+     [1] Standard format (default) — OTP generated on demand without button press
+     [2] Require a button press to show the code (Touch Required)
+2. Configuration support:
+   - `config.toml` & `config.example.toml`: `[token2] button_required = true/false`
+   - Default value `False` (Standard format).
+3. TUI Settings Editor:
+   - Added option `[6] Изменить формат TOTP по умолчанию`.
+   - Settings summary panel displays current configured format.
+4. CLI batch mode:
+   - Added flag `--button-required` for non-interactive synchronization.
+5. Low-level USB-HID protocol and adapter:
+   - `Token2Adapter.write_entry` and `Token2DirectClient.write_entry` receive `btn_flag`
+     (0x00 for standard, 0x01 for touch required).
+   - In `CMD_WRITE_SEED` decrypted payload, byte 5 (`btn_flag`) is set to 0x00 or 0x01.
+   - `Token2CLIAdapter` appends `--button-required` when `btn_flag != 0`.
+   - `Token2Profile` tracks `btn_flag` on listed token profiles.
+
+--------------------------------------------------------------------------------
+AUTOMATED REGRESSION TEST EVIDENCE (403 / 403 PASSED)
+--------------------------------------------------------------------------------
+Command: python3 -m pytest
+Output:
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+testpaths: tests
+collected 403 items
+
+tests/e2e/test_tier1_features.py (27 passed)
+tests/e2e/test_tier2_boundaries.py (24 passed)
+tests/e2e/test_tier3_combinations.py (14 passed)
+tests/e2e/test_tier4_stress.py (16 passed)
+tests/test_cli.py (13 passed)
+tests/test_diff.py (12 passed)
+tests/test_kpxc.py (15 passed)
+tests/test_kpxc_direct.py (18 passed)
+tests/test_token2.py (18 passed)
+tests/test_token2_protocol.py (21 passed)
+tests/test_token2_adversarial.py (25 passed)
+tests/test_chaos.py (6 passed)
+tests/test_tui.py (23 passed)
+tests/test_tui_stress.py (34 passed)
+
+======================== 403 passed in 86.23s (0:01:26) ========================
+
+--------------------------------------------------------------------------------
+CHECKLIST MAPPING & MACHINE VERIFICATION
+--------------------------------------------------------------------------------
+FMT-01: prompt_entry_format interactive flow -> test_prompt_entry_format_choices, test_main_menu_sync_apply_add_touch_required (PASSED)
+FMT-02: TUI Settings Editor option [6] -> test_settings_editor_edit_all_fields, test_settings_editor_complete_mutation_cycle (PASSED)
+FMT-03: config.toml button_required serialization -> Token2Config & load_config/save_config (PASSED)
+FMT-04: CLI --button-required flag -> test_cli_batch_button_required_flag (PASSED)
+FMT-05: USB-HID APDU wire protocol btn_flag byte 5 -> test_t1_token2_write_seed, test_token2_protocol (PASSED)
+FMT-06: Token2Profile btn_flag tracking -> test_token2_protocol, test_cli (PASSED)
+FMT-07: Full regression battery -> 403 / 403 passed in 86.23s (PASSED)
+================================================================================
+VERDICT: READY FOR RELEASE v0.3.0
+================================================================================

@@ -320,8 +320,9 @@ def test_main_menu_sync_apply_add(tmp_path):
     mock_adapter = MagicMock()
     mock_adapter.get_all.return_value = []
 
+    # Sequence: 1 (Sync) -> 1 (Add Only) -> 1 (Standard format) -> Enter (return to menu) -> 4 (Exit)
     with (
-        patch.object(test_console, "input", side_effect=["1", "1", "", "4"]),
+        patch.object(test_console, "input", side_effect=["1", "1", "1", "", "4"]),
         patch("getpass.getpass", side_effect=["pwd", "123456"]),
         patch("t2_kpxc_sync.tui.read_kpxc_entries", return_value=[entry]),
         patch("t2_kpxc_sync.tui.Token2Adapter", return_value=mock_adapter),
@@ -329,6 +330,29 @@ def test_main_menu_sync_apply_add(tmp_path):
         run_main_menu(cfg, con=test_console)
 
     mock_adapter.write_entry.assert_called_once_with(1, entry)
+
+
+def test_main_menu_sync_apply_add_touch_required(tmp_path):
+    vault = tmp_path / "db.kdbx"
+    vault.write_bytes(b"dummy")
+    cfg = AppConfig(keepassxc=KeePassXCConfig(database_path=str(vault)))
+
+    entry = TOTPEntry(issuer="Google", account="user", secret="JBSWY3DPEHPK3PXP")
+
+    test_console = Console(record=True)
+    mock_adapter = MagicMock()
+    mock_adapter.get_all.return_value = []
+
+    # Sequence: 1 (Sync) -> 1 (Add Only) -> 2 (Touch required format) -> Enter (return to menu) -> 4 (Exit)
+    with (
+        patch.object(test_console, "input", side_effect=["1", "1", "2", "", "4"]),
+        patch("getpass.getpass", side_effect=["pwd", "123456"]),
+        patch("t2_kpxc_sync.tui.read_kpxc_entries", return_value=[entry]),
+        patch("t2_kpxc_sync.tui.Token2Adapter", return_value=mock_adapter),
+    ):
+        run_main_menu(cfg, con=test_console)
+
+    mock_adapter.write_entry.assert_called_once_with(1, entry, btn_flag=1)
 
 
 def test_main_menu_dry_run(tmp_path):
@@ -416,9 +440,11 @@ def test_settings_editor_edit_all_fields(tmp_path):
         "Stale, Archive",
         "5",  # Edit backend
         "2",  # direct
+        "6",  # Edit default TOTP format
+        "2",  # Touch required
         "2",  # Edit keyfile again -> Clear it
         "C",
-        "7",  # Back
+        "8",  # Back
     ]
 
     with patch.object(test_console, "input", side_effect=inputs):
@@ -429,6 +455,7 @@ def test_settings_editor_edit_all_fields(tmp_path):
     assert updated_cfg.keepassxc.yubikey_slot == "2"
     assert updated_cfg.keepassxc.excluded_groups == ["Stale", "Archive"]
     assert updated_cfg.keepassxc.backend == "direct"
+    assert updated_cfg.token2.button_required is True
 
     # Verify persisted to TOML
     loaded = load_config(cfg_file)
@@ -437,17 +464,21 @@ def test_settings_editor_edit_all_fields(tmp_path):
     assert loaded.keepassxc.yubikey_slot == "2"
     assert loaded.keepassxc.excluded_groups == ["Stale", "Archive"]
     assert loaded.keepassxc.backend == "direct"
+    assert loaded.token2.button_required is True
 
 
 def test_settings_editor_reset_defaults(tmp_path):
     cfg_file = tmp_path / "config.toml"
-    cfg = AppConfig(keepassxc=KeePassXCConfig(database_path="/custom/path.kdbx", yubikey_slot="1"))
+    cfg = AppConfig(
+        keepassxc=KeePassXCConfig(database_path="/custom/path.kdbx", yubikey_slot="1"),
+        token2=Token2Config(button_required=True),
+    )
 
     test_console = Console(record=True)
     inputs = [
-        "6",  # Reset defaults
+        "7",  # Reset defaults
         "y",  # confirm
-        "7",  # back
+        "8",  # back
     ]
 
     with patch.object(test_console, "input", side_effect=inputs):
@@ -455,8 +486,37 @@ def test_settings_editor_reset_defaults(tmp_path):
 
     assert reset_cfg.keepassxc.database_path == ""
     assert reset_cfg.keepassxc.yubikey_slot == ""
+    assert reset_cfg.token2.button_required is False
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.database_path == ""
+    assert loaded.token2.button_required is False
+
+
+def test_prompt_entry_format_choices():
+    """Verifies prompt_entry_format interactive handling."""
+    from t2_kpxc_sync.tui import prompt_entry_format
+
+    c = Console(record=True)
+
+    # 1. User picks '1' -> Standard (0)
+    with patch.object(c, "input", return_value="1"):
+        assert prompt_entry_format(default_button_required=False, con=c) == 0
+
+    # 2. User picks '2' -> Touch required (1)
+    with patch.object(c, "input", return_value="2"):
+        assert prompt_entry_format(default_button_required=False, con=c) == 1
+
+    # 3. User hits Enter with default False -> 0
+    with patch.object(c, "input", return_value=""):
+        assert prompt_entry_format(default_button_required=False, con=c) == 0
+
+    # 4. User hits Enter with default True -> 1
+    with patch.object(c, "input", return_value=""):
+        assert prompt_entry_format(default_button_required=True, con=c) == 1
+
+    # 5. User interrupts -> returns default
+    with patch.object(c, "input", side_effect=KeyboardInterrupt):
+        assert prompt_entry_format(default_button_required=True, con=c) == 1
 
 
 def test_main_menu_keyboard_interrupt_handled():

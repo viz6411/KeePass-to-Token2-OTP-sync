@@ -178,4 +178,31 @@
   - *Evidence*: `python3 -m pytest` (399 passed in 98.07s)
   - *Manual Evidence*: [manual-20261114-v022-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v022-results.txt)
 
+---
+
+## 11. Верификация релиза v0.3.0 (TOTP Entry Format Selection & Touch Button Requirement)
+- [x] **FMT-01**: Интерактивный запрос формата записи TOTP в TUI на финальном шаге перед записью.
+  - *Expected*: Перед выполнением записей на токен TUI вызывает `prompt_entry_format()`, предлагая выбор: [1] Обычный формат (по умолчанию) или [2] Требовать касания для показа кода (Require touch/button press).
+  - *Evidence*: `tests/test_tui.py::test_prompt_entry_format_choices`, `tests/test_tui.py::test_main_menu_sync_apply_add_touch_required`
+- [x] **FMT-02**: Настройка формата по умолчанию в редакторе настроек TUI (`[6] Изменить формат TOTP по умолчанию`).
+  - *Expected*: В меню настроек отображается текущий формат («Обычный» / «Требуется нажатие кнопки»), опция `[6]` позволяет переключать значение и сохранять в `config.toml`.
+  - *Evidence*: `tests/test_tui.py::test_settings_editor_edit_all_fields`, `tests/test_tui_stress.py::test_settings_editor_complete_mutation_cycle`
+- [x] **FMT-03**: Поддержка конфигурационного параметра `button_required` в `config.toml` и `config.example.toml`.
+  - *Expected*: `Token2Config` содержит поле `button_required: bool = False`, корректно читается и сохраняется сериализатором.
+  - *Evidence*: `src/t2_kpxc_sync/config.py`, `config.example.toml`
+- [x] **FMT-04**: Поддержка CLI-флага `--button-required` для пакетного режима синхронизации.
+  - *Expected*: При передаче `--button-required` вычисляется `btn_flag=1`, при отсутствии — `btn_flag=0` (или берётся из конфига).
+  - *Evidence*: `tests/test_cli.py::test_cli_batch_button_required_flag`
+- [x] **FMT-05**: Проброс `btn_flag` (0x00 / 0x01) на аппаратный уровень (USB-HID direct client & fallback CLI).
+  - *Expected*: Байт 5 расшифрованного пакета `CMD_WRITE_SEED` передаёт флаг `btn_flag`, а `Token2CLIAdapter` при необходимости добавляет `--button-required`.
+  - *Evidence*: `src/t2_kpxc_sync/token2/adapter.py`, `src/t2_kpxc_sync/token2/direct.py`
+- [x] **FMT-06**: Поддержка флага `btn_flag` в модели `Token2Profile` при листинге записей.
+  - *Expected*: `Token2Profile.btn_flag` считывается из метаданных профилей устройства.
+  - *Evidence*: `src/t2_kpxc_sync/models.py`, `src/t2_kpxc_sync/token2/client.py`
+- [x] **FMT-07**: Полный регрессионный прогон всего набора автотестов (403 теста).
+  - *Expected*: 100% тестов проходят успешно без ошибок и регрессий.
+  - *Evidence*: `python3 -m pytest` (403 passed)
+  - *Manual Evidence*: [manual-20261114-v030-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v030-results.txt)
+
+
 

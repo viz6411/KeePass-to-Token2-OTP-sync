@@ -189,6 +189,7 @@ class Token2DirectClient:
                     digits=item["digits"],
                     period=item["timestep"],
                     current_otp=item["otp_code"],
+                    btn_flag=item.get("btn_flag", 0),
                 )
             )
 

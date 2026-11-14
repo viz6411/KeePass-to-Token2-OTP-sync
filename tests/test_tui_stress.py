@@ -264,7 +264,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
 
     # We will step through each mutation individually and verify disk state
     # Mutation 1: Set database_path
-    inputs = ["1", str(vault1), "7"]
+    inputs = ["1", str(vault1), "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(initial_cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.database_path == str(vault1.resolve())
@@ -272,7 +272,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.database_path == str(vault1.resolve())
 
     # Mutation 2: Set keyfile_path
-    inputs = ["2", str(keyfile1), "7"]
+    inputs = ["2", str(keyfile1), "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.keyfile_path == str(keyfile1.resolve())
@@ -280,7 +280,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.keyfile_path == str(keyfile1.resolve())
 
     # Mutation 3: Clear keyfile_path with 'C'
-    inputs = ["2", "C", "7"]
+    inputs = ["2", "C", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.keyfile_path == ""
@@ -289,7 +289,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
 
     # Mutation 4: Clear keyfile_path with Russian 'с' (Cyrillic)
     # First set it again
-    inputs = ["2", str(keyfile1), "2", "с", "7"]
+    inputs = ["2", str(keyfile1), "2", "с", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.keyfile_path == ""
@@ -297,14 +297,14 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.keyfile_path == ""
 
     # Mutation 5: Set YubiKey slot to '1', then '2'
-    inputs = ["3", "1", "7"]
+    inputs = ["3", "1", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.yubikey_slot == "1"
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.yubikey_slot == "1"
 
-    inputs = ["3", "2", "7"]
+    inputs = ["3", "2", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.yubikey_slot == "2"
@@ -312,7 +312,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.yubikey_slot == "2"
 
     # Mutation 6: Clear YubiKey slot with 'C' and with Russian 'с'
-    inputs = ["3", "C", "7"]
+    inputs = ["3", "C", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.yubikey_slot == ""
@@ -320,7 +320,7 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.yubikey_slot == ""
 
     # Mutation 7: Edit excluded groups
-    inputs = ["4", "Alpha, Beta, Gamma", "7"]
+    inputs = ["4", "Alpha, Beta, Gamma", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.excluded_groups == ["Alpha", "Beta", "Gamma"]
@@ -328,29 +328,37 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert loaded.keepassxc.excluded_groups == ["Alpha", "Beta", "Gamma"]
 
     # Mutation 8: Edit backend ('1' auto, '2' direct, '3' cli)
-    inputs = ["5", "2", "7"]
+    inputs = ["5", "2", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.backend == "direct"
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.backend == "direct"
 
-    inputs = ["5", "3", "7"]
+    inputs = ["5", "3", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.backend == "cli"
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.backend == "cli"
 
-    inputs = ["5", "1", "7"]
+    inputs = ["5", "1", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.backend == "auto"
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.backend == "auto"
 
-    # Mutation 9: Reset to defaults with '6' + 'y'
-    inputs = ["6", "y", "7"]
+    # Mutation 9: Edit default TOTP format (choice '6')
+    inputs = ["6", "2", "8"]
+    with patch.object(test_console, "input", side_effect=inputs):
+        cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
+    assert cfg.token2.button_required is True
+    loaded = load_config(cfg_file)
+    assert loaded.token2.button_required is True
+
+    # Mutation 10: Reset to defaults with '7' + 'y'
+    inputs = ["7", "y", "8"]
     with patch.object(test_console, "input", side_effect=inputs):
         cfg = handle_settings_menu(cfg, cfg_file, con=test_console)
     assert cfg.keepassxc.database_path == ""
@@ -358,11 +366,13 @@ def test_settings_editor_complete_mutation_cycle(tmp_path):
     assert cfg.keepassxc.yubikey_slot == ""
     assert cfg.keepassxc.backend == "auto"
     assert cfg.keepassxc.excluded_groups == ["Recycle Bin", "Archive"]
+    assert cfg.token2.button_required is False
 
     loaded = load_config(cfg_file)
     assert loaded.keepassxc.database_path == ""
     assert loaded.keepassxc.keyfile_path == ""
     assert loaded.keepassxc.yubikey_slot == ""
+    assert loaded.token2.button_required is False
 
 
 def test_settings_editor_invalid_inputs_preserve_disk(tmp_path):
@@ -383,7 +393,7 @@ def test_settings_editor_invalid_inputs_preserve_disk(tmp_path):
         "invalid_slot",  # Invalid slot
         "5",  # Edit backend
         "99",  # Invalid backend choice
-        "7",  # Back
+        "8",  # Back
     ]
 
     with patch.object(test_console, "input", side_effect=inputs):
@@ -456,7 +466,7 @@ def test_settings_menu_interruption_breaks_cleanly(exception_cls):
     assert result_cfg == cfg
 
 
-@pytest.mark.parametrize("choice_key", ["1", "2", "3", "4", "5", "6"])
+@pytest.mark.parametrize("choice_key", ["1", "2", "3", "4", "5", "6", "7"])
 def test_settings_subprompts_handle_interruption(choice_key):
     """Every sub-prompt in settings menu handles KeyboardInterrupt without crash, remaining in loop."""
     test_console = Console(record=True)
@@ -464,7 +474,7 @@ def test_settings_subprompts_handle_interruption(choice_key):
     inputs = [
         choice_key,
         KeyboardInterrupt,  # Interrupt inside sub-prompt
-        "7",  # Return to main menu
+        "8",  # Return to main menu
     ]
 
     with patch.object(test_console, "input", side_effect=inputs):

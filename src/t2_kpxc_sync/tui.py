@@ -104,6 +104,7 @@ def apply_sync(
     mode: str,
     confirm_delete: bool = True,
     con: Optional[Console] = None,
+    btn_flag: int = 0,
 ) -> int:
     """Applies sync operations to the Token2 hardware token based on selected mode.
 
@@ -112,6 +113,9 @@ def apply_sync(
       - 'add_update' / '2': Adds new entries and updates modified ones
       - 'full_sync' / '3': Adds new, updates modified, and deletes obsolete entries
       - 'cancel' / '4': Aborts without changes
+
+    Args:
+      btn_flag: 0 for Standard format (no touch), 1 for Touch / Button Press Required.
 
     Returns number of executed operations.
     """
@@ -152,9 +156,13 @@ def apply_sync(
     # 2. Updates (delete old slot, then write updated entry)
     if normalized_mode in ("add_update", "2", "full_sync", "3") and diff.to_update:
         for entry, profile in diff.to_update:
-            c.print(f"[yellow]Updating slot {profile.slot}: {entry.issuer} ({entry.account})...[/yellow]")
+            format_tag = " [touch required]" if btn_flag == 1 else ""
+            c.print(f"[yellow]Updating slot {profile.slot}: {entry.issuer} ({entry.account}){format_tag}...[/yellow]")
             adapter.delete_entry(profile.slot)
-            adapter.write_entry(profile.slot, entry)
+            if btn_flag:
+                adapter.write_entry(profile.slot, entry, btn_flag=btn_flag)
+            else:
+                adapter.write_entry(profile.slot, entry)
             ops_count += 1
 
     # 3. Additions
@@ -165,13 +173,50 @@ def apply_sync(
 
         for entry in diff.to_add:
             slot = free_slots.pop(0)
-            c.print(f"[green]Adding to slot {slot}: {entry.issuer} ({entry.account})...[/green]")
-            adapter.write_entry(slot, entry)
+            format_tag = " [touch required]" if btn_flag == 1 else ""
+            c.print(f"[green]Adding to slot {slot}: {entry.issuer} ({entry.account}){format_tag}...[/green]")
+            if btn_flag:
+                adapter.write_entry(slot, entry, btn_flag=btn_flag)
+            else:
+                adapter.write_entry(slot, entry)
             occupied.add(slot)
             ops_count += 1
 
     c.print(f"[bold green]Successfully performed {ops_count} operations.[/bold green]")
     return ops_count
+
+
+def prompt_entry_format(
+    default_button_required: bool = False,
+    con: Optional[Console] = None,
+) -> int:
+    """Prompts user to select TOTP entry format on the final step before writing.
+
+    Options:
+      [1] Standard format (no touch required)
+      [2] Require a button press to show the code (touch token)
+
+    Returns:
+      0 for standard format, 1 for touch/button-required.
+    """
+    c = con or console
+    default_choice = "2" if default_button_required else "1"
+
+    c.print("\n[bold]Select TOTP entry format:[/bold]")
+    c.print(f"  [1] Обычный формат (Standard — no touch required){' (default)' if default_choice == '1' else ''}")
+    c.print(f"  [2] Требовать касания (Require button press to show code){' (default)' if default_choice == '2' else ''}")
+
+    try:
+        choice = c.input(f"Enter choice [1-2] (default: {default_choice}): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return 1 if default_button_required else 0
+
+    if not choice:
+        return 1 if default_button_required else 0
+
+    if choice in ("2", "touch", "button", "касание"):
+        return 1
+    return 0
 
 
 def run_interactive_menu(con: Optional[Console] = None) -> str:
@@ -530,7 +575,13 @@ def handle_sync_action(
                 pass
             return
 
-        # 8. Apply Sync
+        # 8. Select TOTP entry format (final step before write)
+        btn_flag = prompt_entry_format(
+            default_button_required=config.token2.button_required,
+            con=c,
+        )
+
+        # 9. Apply Sync
         try:
             apply_sync(
                 adapter=adapter,
@@ -539,6 +590,7 @@ def handle_sync_action(
                 mode=mode,
                 confirm_delete=True,
                 con=c,
+                btn_flag=btn_flag,
             )
         except Token2Error as err:
             c.print(f"[bold red]Sync Error: {err}[/bold red]")
@@ -570,12 +622,15 @@ def handle_settings_menu(
 
     while True:
         kpxc = current_config.keepassxc
+        t2 = current_config.token2
+        fmt_label = "Require touch (Button press)" if t2.button_required else "Standard (No touch)"
         settings_text = (
             f"[bold]Database path:[/bold]   {kpxc.database_path or '(not configured)'}\n"
             f"[bold]Keyfile path:[/bold]    {kpxc.keyfile_path or '(none)'}\n"
             f"[bold]YubiKey slot:[/bold]    {kpxc.yubikey_slot or '(disabled)'}\n"
             f"[bold]Excluded groups:[/bold] {', '.join(kpxc.excluded_groups)}\n"
             f"[bold]KDBX backend:[/bold]    {kpxc.backend}\n"
+            f"[bold]TOTP format:[/bold]     {fmt_label}\n"
             f"[bold]Config file:[/bold]     {config_path}"
         )
         c.print()
@@ -585,16 +640,17 @@ def handle_settings_menu(
         c.print("  [bold cyan][3][/bold cyan] Изменить слот YubiKey (1, 2 или отключить)")
         c.print("  [bold cyan][4][/bold cyan] Настроить исключаемые группы")
         c.print("  [bold cyan][5][/bold cyan] Изменить режим чтения KDBX (auto / direct / cli)")
-        c.print("  [bold cyan][6][/bold cyan] Сбросить настройки на значения по умолчанию")
-        c.print("  [bold cyan][7][/bold cyan] Назад в главное меню")
+        c.print("  [bold cyan][6][/bold cyan] Изменить формат TOTP по умолчанию (обычный / по касанию)")
+        c.print("  [bold cyan][7][/bold cyan] Сбросить настройки на значения по умолчанию")
+        c.print("  [bold cyan][8][/bold cyan] Назад в главное меню")
         c.print()
 
         try:
-            choice = c.input("[bold cyan]Enter choice [1-7] (default: 7): [/bold cyan]").strip()
+            choice = c.input("[bold cyan]Enter choice [1-8] (default: 8): [/bold cyan]").strip()
         except (EOFError, KeyboardInterrupt):
             break
 
-        if not choice or choice in ("7", "q", "exit", "back"):
+        if not choice or choice in ("8", "q", "exit", "back"):
             break
 
         if choice == "1":
@@ -745,6 +801,25 @@ def handle_settings_menu(
                 c.print(f"[bold green]KDBX backend set to '{backend_map[sub]}' and saved.[/bold green]")
 
         elif choice == "6":
+            curr_fmt = "Require touch (Button press)" if current_config.token2.button_required else "Standard (No touch)"
+            c.print(f"\n[bold]Edit Default TOTP Entry Format[/bold] (current: {curr_fmt})")
+            c.print("  [1] Обычный формат (Standard — no touch required)")
+            c.print("  [2] Требовать касания (Require button press to show code)")
+            c.print("  [Enter] Cancel")
+            try:
+                sub = c.input("[bold cyan]Choice [1-2]: [/bold cyan]").strip()
+            except (EOFError, KeyboardInterrupt):
+                continue
+            if sub in ("1", "standard", "обычный"):
+                current_config.token2.button_required = False
+                save_config(current_config, config_path)
+                c.print("[bold green]Default format set to Standard (no touch required) and saved.[/bold green]")
+            elif sub in ("2", "touch", "button", "касание"):
+                current_config.token2.button_required = True
+                save_config(current_config, config_path)
+                c.print("[bold green]Default format set to Require button press (touch) and saved.[/bold green]")
+
+        elif choice == "7":
             try:
                 conf = c.input("\n[bold red]Reset all configuration to defaults? [y/N]: [/bold red]").strip().lower()
             except (EOFError, KeyboardInterrupt):

@@ -183,6 +183,33 @@ def test_cli_batch_dry_run(tmp_path):
         mock_sync.assert_not_called()
 
 
+def test_cli_batch_button_required_flag(tmp_path):
+    vault = tmp_path / "vault.kdbx"
+    vault.write_bytes(b"dummy")
+
+    entry = TOTPEntry(issuer="A", account="u", secret="JBSWY3DPEHPK3PXP")
+    mock_adapter = MagicMock()
+    mock_adapter.get_all.return_value = []
+
+    with (
+        patch("getpass.getpass", return_value=""),
+        patch("t2_kpxc_sync.cli.read_kpxc_entries", return_value=[entry]),
+        patch("t2_kpxc_sync.cli.Token2CLIAdapter", return_value=mock_adapter),
+        patch("t2_kpxc_sync.cli.apply_sync") as mock_sync,
+    ):
+        # 1. With --button-required
+        exit_code = main(["--db", str(vault), "--mode", "add_only", "--button-required"])
+        assert exit_code == 0
+        _, kwargs = mock_sync.call_args
+        assert kwargs.get("btn_flag") == 1
+
+        # 2. Without --button-required (defaults to 0)
+        exit_code = main(["--db", str(vault), "--mode", "add_only"])
+        assert exit_code == 0
+        _, kwargs = mock_sync.call_args
+        assert kwargs.get("btn_flag") == 0
+
+
 def test_config_save_load_windows_path_escaping(tmp_path):
     cfg_file = tmp_path / "win_config.toml"
     win_path = r"C:\Users\tester\Documents\passwords.kdbx"

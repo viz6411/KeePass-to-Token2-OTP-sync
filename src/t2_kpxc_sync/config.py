@@ -28,6 +28,7 @@ class KeePassXCConfig:
 @dataclass
 class Token2Config:
     cli_binary: str = "token2-otp-cli"
+    button_required: bool = False
 
 
 @dataclass
@@ -74,6 +75,7 @@ def load_config(path: Optional[str | Path] = None) -> AppConfig:
 
     t2_cfg = Token2Config(
         cli_binary=str(t2_data.get("cli_binary", "token2-otp-cli")),
+        button_required=bool(t2_data.get("button_required", False)),
     )
 
     return AppConfig(keepassxc=kpxc_cfg, token2=t2_cfg)
@@ -104,6 +106,7 @@ def save_config(config: AppConfig, path: Optional[str | Path] = None) -> None:
         "",
         "[token2]",
         f"cli_binary = {_toml_str(config.token2.cli_binary)}",
+        f"button_required = {'true' if config.token2.button_required else 'false'}",
         "",
     ]
     content = "\n".join(lines)
