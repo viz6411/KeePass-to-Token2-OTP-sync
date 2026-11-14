@@ -75,7 +75,7 @@ class ChaoticFeatureReportTransport(BaseTransport):
     def get_feature_report(self, report_id: int, length: int) -> bytes:
         if not self.canned_reports:
             # Default empty frame
-            flags_seq = (FLAG_LAST_FRAME & 0xF0) | (self._seq & 0x0F)
+            flags_seq = (FLAG_LAST_FRAME & 0xF0) | 0
             return bytes([FEATURE_REPORT_ID, FEATURE_REPORT_MAGIC, flags_seq, 0]) + bytes(61)
         return self.canned_reports.pop(0)
 

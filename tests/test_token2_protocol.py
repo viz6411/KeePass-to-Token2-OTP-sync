@@ -14,6 +14,8 @@ import pytest
 from t2_kpxc_sync.models import TOTPEntry
 from t2_kpxc_sync.token2 import (
     CMD_SET_DEVICE_TYPE,
+    FEATURE_REPORT_ID,
+    FEATURE_REPORT_MAGIC,
     IV_1,
     SW_BUTTON_TIMEOUT,
     SW_OK,
@@ -25,6 +27,7 @@ from t2_kpxc_sync.token2 import (
     Token2ProtocolError,
     Token2TimeoutError,
     build_apdu,
+    build_enum_codes_apdu,
     build_get_ecdh_pubkey_apdu,
     build_get_info_apdu,
     build_write_seed_apdu,
@@ -575,5 +578,69 @@ def test_apdu_extended_lc_for_empty_payload():
 
     # 3. SW_SHORT_FORM_REJECTED is defined as 0x6FFB
     assert SW_SHORT_FORM_REJECTED == 0x6FFB
+
+
+def test_usb_sequence_counter_strictly_resets_per_apdu():
+    """Verifies that every APDU command starts chunk 0 with seq = 0 (spec §4.3).
+
+    Consecutive calls to send_apdu must never carry over previous sequence counts,
+    which was the root cause of hardware error 0x6FFB during direct write.
+    """
+    sent_reports: list[bytes] = []
+
+    class SpyTransport(MockHIDTransport):
+        def send_feature_report(self, report: bytes) -> None:
+            sent_reports.append(bytes(report))
+            super().send_feature_report(report)
+
+    spy = SpyTransport()
+    spy.open()
+
+    # APDU 1: GET_INFO
+    resp1 = spy.send_apdu(build_get_info_apdu())
+    _, sw1 = parse_status_word(resp1)
+    assert sw1 == 0x9000
+    assert len(sent_reports) == 1
+    assert sent_reports[0][2] & 0x0F == 0, "First APDU chunk 0 must have seq = 0"
+
+    # APDU 2: ENUM_CODES
+    sent_reports.clear()
+    resp2 = spy.send_apdu(build_enum_codes_apdu())
+    _, sw2 = parse_status_word(resp2)
+    assert sw2 in (0x9000, 0x6A80)
+    assert len(sent_reports) == 1
+    assert sent_reports[0][2] & 0x0F == 0, "Second APDU chunk 0 must have seq = 0"
+
+    # APDU 3: GET_ECDH_PUBKEY (the command that previously failed with 0x6FFB)
+    sent_reports.clear()
+    resp3 = spy.send_apdu(build_get_ecdh_pubkey_apdu())
+    _, sw3 = parse_status_word(resp3)
+    assert sw3 == 0x9000
+    assert len(sent_reports) == 1
+    assert sent_reports[0][2] & 0x0F == 0, "Third APDU chunk 0 must have seq = 0"
+
+    spy.close()
+
+
+def test_mock_transport_rejects_out_of_order_sequence_with_6ffb():
+    """Verifies that MockHIDTransport behaves like real hardware when receiving bad sequence."""
+    mock = MockHIDTransport()
+    mock.open()
+
+    # Send a feature report with seq = 1 instead of expected seq = 0
+    bad_flags_seq = 0x00 | 1  # FLAG_LAST_FRAME | seq=1
+    bad_report = (
+        bytes([FEATURE_REPORT_ID, FEATURE_REPORT_MAGIC, bad_flags_seq, 7])
+        + build_get_ecdh_pubkey_apdu()
+        + bytes(61 - 7)
+    )
+    mock.send_feature_report(bad_report)
+
+    resp = mock.get_feature_report(0, 65)
+    raw = bytes(resp)
+    # Status word in response should be 0x6FFB (SW_SHORT_FORM_REJECTED)
+    assert raw[4:6] == b"\x6F\xFB"
+    mock.close()
+
 
 

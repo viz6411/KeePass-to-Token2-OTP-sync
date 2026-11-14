@@ -60,6 +60,8 @@ from .protocol import (
     validate_apdu_safety,
 )
 from .transport import (
+    FEATURE_REPORT_ID,
+    FEATURE_REPORT_MAGIC,
     BaseTransport,
     HIDTransport,
     MockHIDTransport,
@@ -76,6 +78,8 @@ __all__ = [
     "CMD_READ_ONE",
     "CMD_SET_DEVICE_TYPE",
     "CMD_WRITE_SEED",
+    "FEATURE_REPORT_ID",
+    "FEATURE_REPORT_MAGIC",
     "IV_1",
     "SW_AUTH_FAILED",
     "SW_BUTTON_TIMEOUT",

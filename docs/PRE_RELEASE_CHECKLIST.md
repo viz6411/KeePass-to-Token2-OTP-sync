@@ -161,3 +161,21 @@
   - *Evidence*: `tests/e2e/test_tier1_features.py::test_t1_token2_write_seed_extended_lc`
   - *Manual Evidence*: [manual-20261114-v021-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v021-results.txt)
 
+---
+
+## 10. Верификация фикса v0.2.2 (USB Sequence Counter Reset per APDU & SW 0x6FFB Elimination)
+- [x] **FIX-04**: Сброс счётчика последовательности USB-HID пакетов (`idx & 0x0F`) для каждого нового APDU фрейма в `send_apdu()`.
+  - *Expected*: Каждый отдельный APDU фрейм начинает первый 64-байтный фрагмент со счетчика 0 (`(flag & 0xF0) | (idx & 0x0F)`), исключая перенос накопленного счетчика от предыдущей команды `list_entries()`.
+  - *Evidence*: `src/t2_kpxc_sync/token2/transport.py` (BaseTransport.send_apdu)
+- [x] **FIX-05**: Валидация сброса счетчика при непрерывной цепочке команд `GET_INFO` -> `ENUM_CODES` -> `GET_ECDH_PUBKEY`.
+  - *Expected*: Все 3 последовательные команды стартуют с `seq = 0`.
+  - *Evidence*: `tests/test_token2_protocol.py::test_usb_sequence_counter_strictly_resets_per_apdu`
+- [x] **FIX-06**: Эмуляция отказа аппаратного токена (`0x6FFB`) в тестовом стенде (`conftest.py` и `MockHIDTransport`) при получении пакетов с нарушенной последовательностью (`seq != 0` на новом APDU).
+  - *Expected*: Виртуальный стенд возвращает аппаратный статус `0x6FFB`, полностью симулируя реальный токен Token2 PIN+.
+  - *Evidence*: `tests/test_token2_protocol.py::test_mock_transport_rejects_out_of_order_sequence_with_6ffb`
+- [x] **FIX-07**: Полный регрессионный прогон всего набора автотестов (399 тестов).
+  - *Expected*: 100% тестов проходят успешно без единого регресса.
+  - *Evidence*: `python3 -m pytest` (399 passed in 98.07s)
+  - *Manual Evidence*: [manual-20261114-v022-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v022-results.txt)
+
+

@@ -123,6 +123,13 @@ class SimulatedToken2HIDDevice:
         if chunk_len > 61:
             raise ValueError(f"Invalid chunk length: {chunk_len} > 61")
 
+        if seq != self._rx_expected_seq:
+            # Emulate real Token2 firmware: out-of-order sequence counter returns 0x6FFB
+            self._rx_apdu_buffer.clear()
+            self._rx_expected_seq = 0
+            self._enqueue_response_reports(bytes([0x6F, 0xFB]))
+            return len(data)
+
         payload_chunk = report[4 : 4 + chunk_len]
         self._rx_apdu_buffer.extend(payload_chunk)
 

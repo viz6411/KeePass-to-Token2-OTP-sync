@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "t2-kpxc-sync"
-version = "0.2.1"
+version = "0.2.2"
 description = "Secure zero-disk-footprint TOTP synchronization between KeePassXC and Token2 PIN+ hardware keys"
 authors = [
     { name = "viz6411" }

@@ -33,6 +33,7 @@ from .protocol import (
     SW_ENTRY_NOT_FOUND,
     SW_MEMORY_FULL,
     SW_OK,
+    SW_SHORT_FORM_REJECTED,
     Token2ProtocolError,
     validate_apdu_safety,
 )
@@ -131,10 +132,13 @@ class BaseTransport(abc.ABC):
             for i in range(0, len(apdu), CHUNK_DATA_MAX_SIZE):
                 chunks.append(apdu[i : i + CHUNK_DATA_MAX_SIZE])
 
+        # Token2 USB-HID wire protocol: sequence counter strictly resets per APDU command
+        self._seq = 0
         for idx, chunk in enumerate(chunks):
             is_last = (idx == len(chunks) - 1)
             flag = FLAG_LAST_FRAME if is_last else FLAG_MORE_FRAMES
-            flags_seq = (flag & 0xF0) | (self._seq & 0x0F)
+            seq_val = idx & 0x0F
+            flags_seq = (flag & 0xF0) | seq_val
 
             pad_len = CHUNK_DATA_MAX_SIZE - len(chunk)
             report = (
@@ -143,13 +147,14 @@ class BaseTransport(abc.ABC):
                 + bytes(pad_len)
             )
             self.send_feature_report(report)
-            self._seq = (self._seq + 1) & 0x0F
+            self._seq = (idx + 1) & 0x0F
 
         # 2. Reassemble incoming response frames
         response_bytes = bytearray()
         start_time = time.monotonic()
         poll_count = 0
         poll_delay = 0.05
+        expected_rx_seq = 0
 
         while True:
             if time.monotonic() - start_time > timeout:
@@ -174,6 +179,7 @@ class BaseTransport(abc.ABC):
             flags_seq = raw[1]
             chunk_len = raw[2]
             flag = flags_seq & 0xF0
+            rx_seq = flags_seq & 0x0F
 
             if flag == FLAG_POLLING_IN_PROGRESS:
                 # Device busy / waiting for touch button
@@ -183,6 +189,12 @@ class BaseTransport(abc.ABC):
                 time.sleep(poll_delay)
                 # In polling mode, sequence counter is NOT advanced
                 continue
+
+            if rx_seq != expected_rx_seq:
+                raise Token2ProtocolError(
+                    f"Sequence mismatch in response frame: got {rx_seq}, expected {expected_rx_seq}"
+                )
+            expected_rx_seq = (expected_rx_seq + 1) & 0x0F
 
             if 3 + chunk_len > len(raw):
                 raise Token2ProtocolError(
@@ -329,7 +341,8 @@ class MockHIDTransport(BaseTransport):
 
         # Internal state for framing simulation
         self._incoming_buffer = bytearray()
-        self._outgoing_chunks: list[bytes] = []
+        self._rx_expected_seq: int = 0
+        self._outgoing_chunks: list[tuple[bytes, int, int]] = []
 
         # Chaos / simulation controls
         self.poll_delay_countdown: int = 0
@@ -339,10 +352,12 @@ class MockHIDTransport(BaseTransport):
 
     def open(self) -> None:
         self._seq = 0
+        self._rx_expected_seq = 0
         self.is_open = True
 
     def close(self) -> None:
         self.is_open = False
+        self._rx_expected_seq = 0
         self._incoming_buffer.clear()
         self._outgoing_chunks.clear()
 
@@ -368,16 +383,29 @@ class MockHIDTransport(BaseTransport):
                 f"Feature report chunk_len ({chunk_len}) exceeds maximum allowed {CHUNK_DATA_MAX_SIZE}"
             )
         flag = flags_seq & 0xF0
+        seq = flags_seq & 0x0F
+
+        if seq != self._rx_expected_seq:
+            # Emulate real Token2 firmware: out-of-order or invalid seq counter yields SW_SHORT_FORM_REJECTED (0x6FFB)
+            self._incoming_buffer.clear()
+            self._rx_expected_seq = 0
+            self._prepare_outgoing_chunks(SW_SHORT_FORM_REJECTED.to_bytes(2, "big"))
+            return
 
         chunk = report[4 : 4 + chunk_len]
         self._incoming_buffer.extend(chunk)
 
-        if flag == FLAG_LAST_FRAME:
+        if flag == FLAG_MORE_FRAMES:
+            self._rx_expected_seq = (seq + 1) & 0x0F
+        elif flag == FLAG_LAST_FRAME:
+            self._rx_expected_seq = 0
             # Full APDU received; process and prepare outgoing response
             apdu = bytes(self._incoming_buffer)
             self._incoming_buffer.clear()
             response_apdu = self._process_apdu(apdu)
             self._prepare_outgoing_chunks(response_apdu)
+        else:
+            raise Token2ProtocolError(f"Unexpected frame flag 0x{flag:02X} in report")
 
     def get_feature_report(self, report_id: int, length: int) -> bytes:
         """Serves outgoing Feature Reports to the host."""
@@ -387,16 +415,16 @@ class MockHIDTransport(BaseTransport):
         # Simulate in-progress / touch polling flag if countdown active
         if self.poll_delay_countdown > 0:
             self.poll_delay_countdown -= 1
-            flags_seq = (FLAG_POLLING_IN_PROGRESS & 0xF0) | (self._seq & 0x0F)
+            flags_seq = (FLAG_POLLING_IN_PROGRESS & 0xF0) | 0
             return bytes([FEATURE_REPORT_ID, FEATURE_REPORT_MAGIC, flags_seq, 0]) + bytes(61)
 
         if not self._outgoing_chunks:
             # Empty response or idle
-            flags_seq = (FLAG_LAST_FRAME & 0xF0) | (self._seq & 0x0F)
+            flags_seq = (FLAG_LAST_FRAME & 0xF0) | 0
             return bytes([FEATURE_REPORT_ID, FEATURE_REPORT_MAGIC, flags_seq, 0]) + bytes(61)
 
-        chunk, flag = self._outgoing_chunks.pop(0)
-        flags_seq = (flag & 0xF0) | (self._seq & 0x0F)
+        chunk, flag, seq = self._outgoing_chunks.pop(0)
+        flags_seq = (flag & 0xF0) | (seq & 0x0F)
         pad_len = CHUNK_DATA_MAX_SIZE - len(chunk)
         return (
             bytes([FEATURE_REPORT_ID, FEATURE_REPORT_MAGIC, flags_seq, len(chunk)])
@@ -408,7 +436,7 @@ class MockHIDTransport(BaseTransport):
         """Splits an APDU response into 61-byte chunks for get_feature_report."""
         self._outgoing_chunks.clear()
         if not apdu_response:
-            self._outgoing_chunks.append((b"", FLAG_LAST_FRAME))
+            self._outgoing_chunks.append((b"", FLAG_LAST_FRAME, 0))
             return
 
         chunks: list[bytes] = []
@@ -418,7 +446,7 @@ class MockHIDTransport(BaseTransport):
         for idx, chunk in enumerate(chunks):
             is_last = (idx == len(chunks) - 1)
             flag = FLAG_LAST_FRAME if is_last else FLAG_MORE_FRAMES
-            self._outgoing_chunks.append((chunk, flag))
+            self._outgoing_chunks.append((chunk, flag, idx & 0x0F))
 
     def _process_apdu(self, apdu: bytes) -> bytes:
         """Dispatches and executes APDU commands against in-memory state."""

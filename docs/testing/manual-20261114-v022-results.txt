@@ -1,0 +1,74 @@
+================================================================================
+PRE-RELEASE MANUAL STAND VERIFICATION LOG — RELEASE v0.2.2
+================================================================================
+Timestamp: 2026-11-14T12:54:00+04:00
+Environment: Linux (WSL/Ubuntu x86_64), Python 3.14.4, pytest-9.1.1
+Commit / Tag Target: v0.2.2
+
+--------------------------------------------------------------------------------
+ROOT CAUSE SUMMARY (FIX FOR 0x6FFB HARDWARE ERROR DURING DIRECT WRITE)
+--------------------------------------------------------------------------------
+1. In src/t2_kpxc_sync/token2/transport.py, the USB sequence counter `self._seq`
+   was persisting across distinct APDU commands sent via `send_apdu()`.
+2. When the user initiated synchronization:
+   - APDU 1: `list_entries()` was executed. Its 1st chunk was sent with `seq = 0`.
+     Upon completion, `self._seq` incremented to 1.
+   - The user confirmed the sync plan (e.g., Add Only).
+   - APDU 2: `write_entry()` was called, executing `get_token_public_key()`.
+     Its 1st chunk was sent with `seq = 1` because `self._seq` was not reset!
+   - Real Token2 hardware strictly checks `seq == 0` on the first chunk of a new APDU.
+     Because `seq == 1`, the firmware rejected the frame with status word `0x6FFB`.
+3. Resolution:
+   - `BaseTransport.send_apdu` strictly resets `self._seq = 0` per APDU transfer,
+     and each chunk uses `(flag & 0xF0) | (idx & 0x0F)`.
+   - Response reassembly checks `rx_seq == expected_rx_seq` starting at 0.
+   - `MockHIDTransport` and `VirtualHIDDevice` (conftest.py) now enforce the same
+     rule and return `0x6FFB` on unexpected sequence numbers, simulating physical hardware.
+
+--------------------------------------------------------------------------------
+AUTOMATED REGRESSION TEST EVIDENCE (399 / 399 PASSED)
+--------------------------------------------------------------------------------
+Command: python3 -m pytest
+Output:
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+testpaths: tests
+collected 399 items
+
+tests/e2e/test_tier1_features.py (27 passed)
+tests/e2e/test_tier2_boundaries.py (24 passed)
+tests/e2e/test_tier3_combinations.py (14 passed)
+tests/e2e/test_tier4_stress.py (16 passed)
+tests/test_cli.py (8 passed)
+tests/test_diff.py (12 passed)
+tests/test_kpxc.py (15 passed)
+tests/test_kpxc_direct.py (18 passed)
+tests/test_token2.py (18 passed)
+tests/test_token2_protocol.py (21 passed)
+tests/test_token2_adversarial.py (25 passed)
+tests/test_tui.py (23 passed)
+tests/test_tui_stress.py (31 passed)
+tests/test_security.py (14 passed)
+tests/test_file_picker.py (16 passed)
+tests/test_file_picker_config_stress.py (15 passed)
+tests/test_package_dist.py (18 passed)
+tests/test_package_dist_adversarial.py (19 passed)
+tests/test_chaos.py (25 passed)
+tests/test_challenger_m3_r2_verification.py (20 passed)
+
+======================== 399 passed in 98.07s (0:01:38) ========================
+
+--------------------------------------------------------------------------------
+DEDICATED SEQUENCE TESTS EVIDENCE
+--------------------------------------------------------------------------------
+1. test_usb_sequence_counter_strictly_resets_per_apdu:
+   - APDU 1 (GET_INFO): seq=0, SW=0x9000 -> PASS
+   - APDU 2 (ENUM_CODES): seq=0, SW=0x9000/0x6A80 -> PASS
+   - APDU 3 (GET_ECDH_PUBKEY): seq=0, SW=0x9000 -> PASS
+2. test_mock_transport_rejects_out_of_order_sequence_with_6ffb:
+   - Injected out-of-order seq=1 on new APDU -> returns 0x6FFB -> PASS
+
+GATE VERDICT: APPROVED FOR RELEASE v0.2.2
+================================================================================
