@@ -135,6 +135,7 @@ def test_kpxc_cli_pipe_parsing(tmp_path):
             db_path=dummy_db,
             password=bytearray(b"master_pwd"),
             cli_binary="keepassxc-cli",
+            backend="cli",
         )
 
         assert len(entries) == 1

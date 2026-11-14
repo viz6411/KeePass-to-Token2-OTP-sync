@@ -1,21 +1,32 @@
-"""Adapter for interacting with Token2 PIN+ hardware tokens via token2-otp-cli."""
+"""Unified adapter layer for Token2 hardware devices.
+
+Provides backward-compatible CLI functions, Token2CLIAdapter, and the modern
+Token2Adapter capable of automatic zero-external-CLI direct USB-HID communication.
+"""
+
+from __future__ import annotations
 
 import json
 import subprocess
-from typing import Any, Optional
+from typing import Any, Self
 
-from .models import TOTPEntry, Token2Profile
-from .security import scrub_bytes
+from ..models import Token2Profile, TOTPEntry
+from ..security import scrub_bytes
+from .client import (
+    Token2ButtonTimeoutError,
+    Token2ClientError,
+    Token2DirectClient,
+    Token2MemoryFullError,
+)
+from .transport import BaseTransport, Token2DeviceNotFoundError, Token2TransportError
 
 
 class Token2Error(Exception):
-    """Base exception for Token2 CLI operations."""
-    pass
+    """Base exception for Token2 operations."""
 
 
 class Token2PINError(Token2Error):
     """Raised when PIN authentication fails. Immediate abort without retries."""
-    pass
 
 
 def build_get_all_command(cli_binary: str = "token2-otp-cli") -> list[str]:
@@ -131,15 +142,15 @@ def parse_entries_json(json_data: str | bytes) -> list[Token2Profile]:
 
 
 class Token2CLIAdapter:
-    """Interacts with Token2 PIN+ R3.3 hardware device via token2-otp-cli."""
+    """Interacts with Token2 PIN+ R3.3 hardware device via external token2-otp-cli."""
 
     def __init__(
         self,
         cli_binary: str = "token2-otp-cli",
         pin: str | bytes | bytearray | None = None,
-    ):
+    ) -> None:
         self.cli_binary = cli_binary
-        self._pin_buf: Optional[bytearray] = None
+        self._pin_buf: bytearray | None = None
         if pin is not None:
             if isinstance(pin, (bytes, bytearray)):
                 self._pin_buf = bytearray(pin)
@@ -152,10 +163,10 @@ class Token2CLIAdapter:
             scrub_bytes(self._pin_buf)
             self._pin_buf = None
 
-    def __enter__(self) -> "Token2CLIAdapter":
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
     def _execute(self, cmd: list[str]) -> str:
@@ -171,8 +182,7 @@ class Token2CLIAdapter:
                 proc = subprocess.run(
                     cmd,
                     input=bytes(stdin_data),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     check=False,
                 )
             except FileNotFoundError as err:
@@ -223,3 +233,149 @@ class Token2CLIAdapter:
         """Deletes a profile from specified slot."""
         cmd = build_delete_command(self.cli_binary, slot)
         self._execute(cmd)
+
+
+class Token2Adapter:
+    """Unified adapter supporting native USB-HID (Zero-External-CLI) and legacy CLI fallback.
+
+    Default backend is 'direct' (native USB-HID feature reports).
+    If 'cli' is specified or 'auto' detects CLI-only requirement, routes to Token2CLIAdapter.
+    """
+
+    def __init__(
+        self,
+        backend: str = "direct",
+        cli_binary: str = "token2-otp-cli",
+        pin: str | bytes | bytearray | None = None,
+        transport: BaseTransport | None = None,
+    ) -> None:
+        self.backend = backend.strip().lower()
+        self.cli_binary = cli_binary
+        self.transport = transport
+        self._pin_buf: bytearray | None = None
+        if pin is not None:
+            if isinstance(pin, (bytes, bytearray)):
+                self._pin_buf = bytearray(pin)
+            else:
+                self._pin_buf = bytearray(str(pin).encode("utf-8"))
+
+        self._direct_client: Token2DirectClient | None = None
+        self._cli_adapter: Token2CLIAdapter | None = None
+        self._slot_map: dict[int, tuple[str, str]] = {}
+
+    def open(self) -> None:
+        """Initializes connection to token."""
+        if self.backend in ("direct", "auto"):
+            if self._direct_client is None:
+                self._direct_client = Token2DirectClient(transport=self.transport)
+            try:
+                self._direct_client.open()
+                return
+            except (Token2DeviceNotFoundError, Token2TransportError) as err:
+                if self.backend == "auto":
+                    self._direct_client = None
+                    self._cli_adapter = Token2CLIAdapter(cli_binary=self.cli_binary, pin=self._pin_buf)
+                    return
+                raise Token2Error(f"Token2 direct USB connection failed: {err}") from err
+
+        if self.backend == "cli" and self._cli_adapter is None:
+            self._cli_adapter = Token2CLIAdapter(cli_binary=self.cli_binary, pin=self._pin_buf)
+
+    def close(self) -> None:
+        """Closes connections and scrubs sensitive PIN memory."""
+        if self._direct_client is not None:
+            self._direct_client.close()
+            self._direct_client = None
+
+        if self._cli_adapter is not None:
+            self._cli_adapter.close()
+            self._cli_adapter = None
+
+        if self._pin_buf is not None:
+            scrub_bytes(self._pin_buf)
+            self._pin_buf = None
+
+        self._slot_map.clear()
+
+    def __enter__(self) -> Self:
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def get_info(self) -> str:
+        """Retrieves device serial number / info."""
+        if self._direct_client is not None:
+            return self._direct_client.get_info()
+        return "Token2 CLI Key"
+
+    def get_all(self) -> list[Token2Profile]:
+        """Lists all profiles stored on the hardware token."""
+        if self._direct_client is not None:
+            try:
+                profiles = self._direct_client.list_entries()
+            except Token2ClientError as err:
+                raise Token2Error(f"Direct Token2 read error: {err}") from err
+
+            self._slot_map = {p.slot: (p.issuer, p.account) for p in profiles}
+            return profiles
+
+        if self._cli_adapter is not None:
+            return self._cli_adapter.get_all()
+
+        self.open()
+        return self.get_all()
+
+    def write_entry(self, slot: int, entry: TOTPEntry) -> None:
+        """Writes or updates a TOTP profile at specified slot."""
+        if self._direct_client is not None:
+            try:
+                self._direct_client.write_entry(
+                    issuer=entry.issuer,
+                    account=entry.account,
+                    secret=entry.secret,
+                    algorithm=entry.algorithm,
+                    digits=entry.digits,
+                    period=entry.period,
+                )
+                self._slot_map[slot] = (entry.issuer, entry.account)
+                return
+            except (Token2MemoryFullError, Token2ButtonTimeoutError, Token2ClientError) as err:
+                raise Token2Error(f"Direct Token2 write error: {err}") from err
+
+        if self._cli_adapter is not None:
+            self._cli_adapter.write_entry(slot, entry)
+            return
+
+        self.open()
+        self.write_entry(slot, entry)
+
+    def delete_entry(self, slot: int) -> None:
+        """Deletes a profile by slot index."""
+        if self._direct_client is not None:
+            target = self._slot_map.get(slot)
+            if target is None:
+                # Refresh mapping to find slot
+                self.get_all()
+                target = self._slot_map.get(slot)
+
+            if target is not None:
+                issuer, account = target
+                try:
+                    self._direct_client.delete_entry(issuer, account)
+                except Token2ClientError as err:
+                    raise Token2Error(f"Direct Token2 delete error: {err}") from err
+                self._slot_map.pop(slot, None)
+            return
+
+        if self._cli_adapter is not None:
+            self._cli_adapter.delete_entry(slot)
+            return
+
+        self.open()
+        self.delete_entry(slot)
+
+
+# Alias conforming to PROJECT.md and SCOPE.md interface specification
+Token2Device = Token2Adapter

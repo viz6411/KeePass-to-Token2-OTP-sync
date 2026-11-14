@@ -1,0 +1,719 @@
+=== PRE-RELEASE VERIFICATION EVIDENCE LOG ===
+Timestamp: 2026-11-14T03:12:09Z
+Environment: Linux 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 | Python: Python 3.14.4
+Git Revision: def5235ee3b0367d027b2f10a705355558711898
+Working Directory: /home/viz/projects/KeePass to Token2 OTP sync
+
+================================================================================
+[1/36] SEC-01: Zero-Disk-Footprint Invariant
+Command: bash scripts/manual/verify_zero_disk.sh
+--------------------------------------------------------------------------------
+=== SEC-01 Zero-Disk-Footprint Invariant Verification ===
+[1] Checking filesystem state before KeePassXC operations...
+Found initial XML files in /tmp: 0
+[2] Running Zero-Disk KeePassXC pipe parsing test...
+Successfully parsed KeePassXC XML in RAM via pure memory buffer.
+[3] Checking filesystem for any leaked files created after marker...
+Zero-Disk Verification PASSED: 0 disk files created, 0 leaks detected.
+Status: PASS (SEC-01 Verified)
+Result: PASS (Exit code 0)
+
+================================================================================
+[2/36] SEC-02: Buffer Scrubbing and Zeroing
+Command: /usr/bin/python3 -m pytest -v tests/test_security.py::test_buffer_zeroing
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_security.py::test_buffer_zeroing PASSED                       [100%]
+
+============================== 1 passed in 0.02s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[3/36] SEC-03: sys.argv Leak Prevention
+Command: /usr/bin/python3 -m pytest -v tests/test_security.py::test_argv_leak_prevention
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_security.py::test_argv_leak_prevention PASSED                 [100%]
+
+============================== 1 passed in 0.02s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[4/36] SEC-04: Memory Hygiene and GC Cleanup
+Command: /usr/bin/python3 -m pytest -v tests/e2e/test_tier1_features.py::test_t1_kdbx_memory_scrubbing tests/test_tui_stress.py::test_memory_hygiene_normal_sync
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/e2e/test_tier1_features.py::test_t1_kdbx_memory_scrubbing PASSED   [ 50%]
+tests/test_tui_stress.py::test_memory_hygiene_normal_sync PASSED         [100%]
+
+============================== 2 passed in 1.29s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[5/36] KPXC-01: Autonomous Direct KDBX Reading
+Command: /usr/bin/python3 -m pytest -v tests/test_kpxc_direct.py::test_direct_read_kdbx40_default tests/e2e/test_tier1_features.py::test_t1_kdbx_standard_otpauth_uri
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_kpxc_direct.py::test_direct_read_kdbx40_default PASSED        [ 50%]
+tests/e2e/test_tier1_features.py::test_t1_kdbx_standard_otpauth_uri PASSED [100%]
+
+============================== 2 passed in 2.50s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[6/36] KPXC-02: RFC 6238 otpauth URI Normalization
+Command: /usr/bin/python3 -m pytest -v tests/test_kpxc.py::test_otpauth_normalization
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_kpxc.py::test_otpauth_normalization PASSED                    [100%]
+
+============================== 1 passed in 0.01s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[7/36] KPXC-03: KeeOtp / TrayTOTP TimeOtp Custom Properties
+Command: /usr/bin/python3 -m pytest -v tests/test_kpxc_direct.py::test_direct_read_custom_properties_traytotp tests/e2e/test_tier1_features.py::test_t1_kdbx_timeotp_custom_properties
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_kpxc_direct.py::test_direct_read_custom_properties_traytotp PASSED [ 50%]
+tests/e2e/test_tier1_features.py::test_t1_kdbx_timeotp_custom_properties PASSED [100%]
+
+============================== 2 passed in 2.20s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[8/36] KPXC-04: Composite Password and Keyfile Auth
+Command: /usr/bin/python3 -m pytest -v tests/e2e/test_tier1_features.py::test_t1_kdbx_composite_password_and_keyfile
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/e2e/test_tier1_features.py::test_t1_kdbx_composite_password_and_keyfile PASSED [100%]
+
+============================== 1 passed in 1.59s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[9/36] KPXC-05: Recycle Bin and Excluded Groups Filtering
+Command: /usr/bin/python3 -m pytest -v tests/test_kpxc.py::test_recycle_bin_ignored
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_kpxc.py::test_recycle_bin_ignored PASSED                      [100%]
+
+============================== 1 passed in 0.01s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[10/36] KPXC-06: Hybrid KeePassXC Routing and YubiKey Fallback
+Command: /usr/bin/python3 -m pytest -v tests/test_kpxc_direct.py::test_hybrid_routing_auto_with_yubikey tests/e2e/test_tier3_combinations.py::test_t3_cross_hybrid_routing_facade
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_kpxc_direct.py::test_hybrid_routing_auto_with_yubikey PASSED  [ 50%]
+tests/e2e/test_tier3_combinations.py::test_t3_cross_hybrid_routing_facade PASSED [100%]
+
+============================== 2 passed in 2.20s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[11/36] T2-01: USB-HID Transport and 65-byte Framing
+Command: /usr/bin/python3 -m pytest -v tests/test_token2_protocol.py::test_mock_transport_framing_and_fragmentation tests/test_token2_protocol.py::test_hid_transport_mocked_calls
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_token2_protocol.py::test_mock_transport_framing_and_fragmentation PASSED [ 50%]
+tests/test_token2_protocol.py::test_hid_transport_mocked_calls PASSED    [100%]
+
+============================== 2 passed in 0.03s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[12/36] T2-02: NIST P-256 ECDH + AES-256-CBC IV-1 Seed Provisioning
+Command: /usr/bin/python3 -m pytest -v tests/test_token2_protocol.py::test_ecdh_aes_round_trip
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_token2_protocol.py::test_ecdh_aes_round_trip PASSED           [100%]
+
+============================== 1 passed in 0.02s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[13/36] T2-03: APDU Commands Execution
+Command: /usr/bin/python3 -m pytest -v tests/e2e/test_tier1_features.py::test_t1_token2_write_seed tests/test_token2_protocol.py::test_direct_client_lifecycle
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/e2e/test_tier1_features.py::test_t1_token2_write_seed PASSED       [ 50%]
+tests/test_token2_protocol.py::test_direct_client_lifecycle PASSED       [100%]
+
+============================== 2 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[14/36] T2-04: Live TOTP Codes and Profile Enumeration
+Command: /usr/bin/python3 -m pytest -v tests/test_token2_protocol.py::test_parse_enum_response_with_and_without_otp
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_token2_protocol.py::test_parse_enum_response_with_and_without_otp PASSED [100%]
+
+============================== 1 passed in 0.03s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[15/36] T2-05: Immediate Abort on Invalid PIN
+Command: /usr/bin/python3 -m pytest -v tests/test_token2.py::test_pin_immediate_abort
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_token2.py::test_pin_immediate_abort PASSED                    [100%]
+
+============================== 1 passed in 0.02s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[16/36] T2-06: CLI Fallback when Native HID Driver is Missing
+Command: /usr/bin/python3 -m pytest -v tests/test_token2_protocol.py::test_adapter_auto_mode_fallback
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_token2_protocol.py::test_adapter_auto_mode_fallback PASSED    [100%]
+
+============================== 1 passed in 0.03s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[17/36] DIFF-01: Diff 4-Way Category Classification
+Command: /usr/bin/python3 -m pytest -v tests/test_diff.py::test_diff_categories
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_diff.py::test_diff_categories PASSED                          [100%]
+
+============================== 1 passed in 0.01s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[18/36] DIFF-02: Hardware Capacity Limit (300 Slots)
+Command: /usr/bin/python3 -m pytest -v tests/test_diff.py::test_capacity_limit_300
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_diff.py::test_capacity_limit_300 PASSED                       [100%]
+
+============================== 1 passed in 0.01s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[19/36] DIFF-03: Live TOTP Seed Discrepancy Rotation Detection
+Command: /usr/bin/python3 -m pytest -v tests/test_diff.py::test_totp_code_verification
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_diff.py::test_totp_code_verification PASSED                   [100%]
+
+============================== 1 passed in 0.01s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[20/36] DIFF-04: Duplicate (issuer, account) Detection
+Command: /usr/bin/python3 -m pytest -v tests/test_diff.py::test_duplicate_entries_detection
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_diff.py::test_duplicate_entries_detection PASSED              [100%]
+
+============================== 1 passed in 0.02s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[21/36] TUI-01: Onboarding Wizard Configuration Generation
+Command: /usr/bin/python3 -m pytest -v tests/test_tui.py::test_wizard_manual_full_flow tests/test_tui.py::test_wizard_browse_flow
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_tui.py::test_wizard_manual_full_flow PASSED                   [ 50%]
+tests/test_tui.py::test_wizard_browse_flow PASSED                        [100%]
+
+============================== 2 passed in 0.07s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[22/36] TUI-02: Main Menu Routing and Sync Modes
+Command: /usr/bin/python3 -m pytest -v tests/test_tui.py::test_main_menu_dry_run tests/e2e/test_tier1_features.py::test_t1_tui_interactive_menu_options
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_tui.py::test_main_menu_dry_run PASSED                         [ 50%]
+tests/e2e/test_tier1_features.py::test_t1_tui_interactive_menu_options PASSED [100%]
+
+============================== 2 passed in 0.06s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[23/36] TUI-03: Settings Editor Mutation and Persistence
+Command: /usr/bin/python3 -m pytest -v tests/test_tui.py::test_settings_editor_edit_all_fields tests/test_tui_stress.py::test_settings_editor_complete_mutation_cycle
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_tui.py::test_settings_editor_edit_all_fields PASSED           [ 50%]
+tests/test_tui_stress.py::test_settings_editor_complete_mutation_cycle PASSED [100%]
+
+============================== 2 passed in 0.13s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[24/36] TUI-04: Native OS File Picker and Headless CLI Fallback
+Command: /usr/bin/python3 -m pytest -v tests/test_file_picker.py tests/test_file_picker_config_stress.py
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 76 items
+
+tests/test_file_picker.py::test_clean_path_input_plain PASSED            [  1%]
+tests/test_file_picker.py::test_clean_path_input_single_quotes PASSED    [  2%]
+tests/test_file_picker.py::test_clean_path_input_double_quotes PASSED    [  3%]
+tests/test_file_picker.py::test_clean_path_input_nested_quotes PASSED    [  5%]
+tests/test_file_picker.py::test_clean_path_input_whitespace PASSED       [  6%]
+tests/test_file_picker.py::test_clean_path_input_tilde_expansion PASSED  [  7%]
+tests/test_file_picker.py::test_clean_path_input_env_vars PASSED         [  9%]
+tests/test_file_picker.py::test_is_gui_available_win32 PASSED            [ 10%]
+tests/test_file_picker.py::test_is_gui_available_darwin PASSED           [ 11%]
+tests/test_file_picker.py::test_is_gui_available_linux_display PASSED    [ 13%]
+tests/test_file_picker.py::test_is_gui_available_linux_wayland PASSED    [ 14%]
+tests/test_file_picker.py::test_is_gui_available_linux_headless PASSED   [ 15%]
+tests/test_file_picker.py::test_format_filters PASSED                    [ 17%]
+tests/test_file_picker.py::test_pick_file_windows_success PASSED         [ 18%]
+tests/test_file_picker.py::test_pick_file_windows_cancel PASSED          [ 19%]
+tests/test_file_picker.py::test_pick_file_windows_missing_binary PASSED  [ 21%]
+tests/test_file_picker.py::test_pick_file_windows_error PASSED           [ 22%]
+tests/test_file_picker.py::test_pick_file_zenity_success PASSED          [ 23%]
+tests/test_file_picker.py::test_pick_file_zenity_cancel PASSED           [ 25%]
+tests/test_file_picker.py::test_pick_file_zenity_error PASSED            [ 26%]
+tests/test_file_picker.py::test_pick_file_kdialog_success PASSED         [ 27%]
+tests/test_file_picker.py::test_pick_file_kdialog_cancel PASSED          [ 28%]
+tests/test_file_picker.py::test_pick_file_macos_success PASSED           [ 30%]
+tests/test_file_picker.py::test_pick_file_macos_cancel PASSED            [ 31%]
+tests/test_file_picker.py::test_pick_file_macos_error PASSED             [ 32%]
+tests/test_file_picker.py::test_pick_file_tkinter_success PASSED         [ 34%]
+tests/test_file_picker.py::test_pick_file_tkinter_cancel PASSED          [ 35%]
+tests/test_file_picker.py::test_pick_file_tkinter_missing PASSED         [ 36%]
+tests/test_file_picker.py::test_open_native_gui_dialog_headless PASSED   [ 38%]
+tests/test_file_picker.py::test_prompt_file_path_valid_file PASSED       [ 39%]
+tests/test_file_picker.py::test_prompt_file_path_quotes_and_tilde PASSED [ 40%]
+tests/test_file_picker.py::test_prompt_file_path_retry_then_success PASSED [ 42%]
+tests/test_file_picker.py::test_prompt_file_path_directory_rejected PASSED [ 43%]
+tests/test_file_picker.py::test_prompt_file_path_cancel_keyword PASSED   [ 44%]
+tests/test_file_picker.py::test_prompt_file_path_default_accepted PASSED [ 46%]
+tests/test_file_picker.py::test_prompt_file_path_interrupt PASSED        [ 47%]
+tests/test_file_picker.py::test_pick_file_gui_success PASSED             [ 48%]
+tests/test_file_picker.py::test_pick_file_gui_fail_fallback_to_prompt PASSED [ 50%]
+tests/test_file_picker.py::test_pick_file_gui_fail_no_fallback PASSED    [ 51%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_empty_and_whitespace PASSED [ 52%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_surrounding_quotes_combinations PASSED [ 53%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_unclosed_and_mismatched_quotes PASSED [ 55%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_quotes_inside_filename PASSED [ 56%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_windows_backslashes_and_unc PASSED [ 57%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_spaces_preservation PASSED [ 59%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_unicode_and_emojis PASSED [ 60%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_injection_strings PASSED [ 61%]
+tests/test_file_picker_config_stress.py::TestCleanPathInputStress::test_tilde_and_environment_expansion PASSED [ 63%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_windows_always_true PASSED [ 64%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_darwin_always_true PASSED [ 65%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_linux_display_set_wayland_unset PASSED [ 67%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_linux_display_unset_wayland_set PASSED [ 68%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_linux_both_set PASSED [ 69%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_linux_both_unset PASSED [ 71%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_linux_empty_strings PASSED [ 72%]
+tests/test_file_picker_config_stress.py::TestHeadlessDetectionStress::test_freebsd_checks_env PASSED [ 73%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_binary_lookup_precedence PASSED [ 75%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_command_flags PASSED [ 76%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_title_single_quotes_and_injection PASSED [ 77%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_filter_formatting_and_escaping PASSED [ 78%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_default_path_directory PASSED [ 80%]
+tests/test_file_picker_config_stress.py::TestWindowsPowerShellConstructionStress::test_powershell_default_path_file_with_existing_parent PASSED [ 81%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_zenity_cancel_vs_crash PASSED [ 82%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_zenity_timeout_and_oserror PASSED [ 84%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_kdialog_cancel_vs_error PASSED [ 85%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_macos_osascript_cancel_vs_error PASSED [ 86%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_linux_fallback_cascade PASSED [ 88%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_linux_cancel_stops_cascade PASSED [ 89%]
+tests/test_file_picker_config_stress.py::TestSubprocessErrorHandlingStress::test_pick_file_fallback_to_console_on_gui_failure PASSED [ 90%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_standard_roundtrip PASSED [ 92%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_windows_paths_with_backslashes_and_spaces PASSED [ 93%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_bmp_cyrillic_unicode_roundtrip PASSED [ 94%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_quotes_and_special_chars_in_paths_and_groups PASSED [ 96%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_empty_excluded_groups PASSED [ 97%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_non_bmp_unicode_emoji_roundtrip PASSED [ 98%]
+tests/test_file_picker_config_stress.py::TestConfigTomlSerializationStress::test_non_bmp_unicode_emoji_regression_guard PASSED [100%]
+
+============================== 76 passed in 0.06s ==============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[25/36] TUI-05: Graceful Exit on Interrupt (Ctrl+C / EOF)
+Command: /usr/bin/python3 -m pytest -v tests/test_tui.py::test_main_menu_keyboard_interrupt_handled tests/test_tui_stress.py::test_main_menu_keyboard_interrupt_graceful_exit
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/test_tui.py::test_main_menu_keyboard_interrupt_handled PASSED      [ 50%]
+tests/test_tui_stress.py::test_main_menu_keyboard_interrupt_graceful_exit PASSED [100%]
+
+============================== 2 passed in 0.06s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[26/36] PKG-01: Standalone Executable Execution (--help)
+Command: ./dist/t2-kpxc-sync --help
+--------------------------------------------------------------------------------
+usage: t2-kpxc-sync [-h] [--config CONFIG] [--db KDBX] [--key-file KEYFILE]
+                    [--yubikey YUBIKEY] [--dry-run]
+                    [--mode {add_only,add_update,full_sync,cancel}] [-y]
+                    [--tui]
+
+Zero-disk-footprint KeePassXC to Token2 PIN+ R3.3 TOTP synchronizer
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Path to config.toml
+  --db, --kdbx KDBX     Path to KeePassXC .kdbx file
+  --key-file KEYFILE    Path to KeePassXC key file
+  --yubikey YUBIKEY     YubiKey slot:serial
+  --dry-run             Only show differences, do not write to token
+  --mode {add_only,add_update,full_sync,cancel}
+                        Non-interactive execution mode
+  -y, --yes             Confirm deletions without prompting
+  --tui                 Launch interactive TUI management interface
+Result: PASS (Exit code 0)
+
+================================================================================
+[27/36] PKG-02: Smart Launchers Execution (--help)
+Command: ./Sync-Token2.sh --help
+--------------------------------------------------------------------------------
+usage: t2-kpxc-sync [-h] [--config CONFIG] [--db KDBX] [--key-file KEYFILE]
+                    [--yubikey YUBIKEY] [--dry-run]
+                    [--mode {add_only,add_update,full_sync,cancel}] [-y]
+                    [--tui]
+
+Zero-disk-footprint KeePassXC to Token2 PIN+ R3.3 TOTP synchronizer
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Path to config.toml
+  --db, --kdbx KDBX     Path to KeePassXC .kdbx file
+  --key-file KEYFILE    Path to KeePassXC key file
+  --yubikey YUBIKEY     YubiKey slot:serial
+  --dry-run             Only show differences, do not write to token
+  --mode {add_only,add_update,full_sync,cancel}
+                        Non-interactive execution mode
+  -y, --yes             Confirm deletions without prompting
+  --tui                 Launch interactive TUI management interface
+Result: PASS (Exit code 0)
+
+================================================================================
+[28/36] PKG-03: Distribution Archive Packaging and Integrity
+Command: /usr/bin/python3 scripts/package_dist.py --version 0.2.0
+--------------------------------------------------------------------------------
+[OK] Successfully packaged distribution archive: /home/viz/projects/KeePass to Token2 OTP sync/dist/t2-kpxc-sync-v0.2.0-linux-x64.tar.gz (29608.6 KB)
+Result: PASS (Exit code 0)
+
+================================================================================
+[29/36] CI-01: GitHub Actions Workflow Syntax Validation
+Command: /usr/bin/python3 -c import yaml; d = yaml.safe_load(open('.github/workflows/release.yml')); assert 'jobs' in d; print('release.yml jobs:', list(d['jobs'].keys()))
+--------------------------------------------------------------------------------
+release.yml jobs: ['test', 'build', 'release']
+Result: PASS (Exit code 0)
+
+================================================================================
+[30/36] ARCH-01: Archify Architecture Map Showcase Validation
+Command: /home/viz/.local/bin/node /home/viz/.gemini/config/skills/archify/bin/archify.mjs deliver architecture docs/architecture.json docs/architecture.html --quality showcase
+--------------------------------------------------------------------------------
+delivered architecture /home/viz/projects/KeePass to Token2 OTP sync/docs/architecture.html
+9/9 artifact checks; composition showcase: pass; sha256 b1931cdf53bf
+Result: PASS (Exit code 0)
+
+================================================================================
+[31/36] CHAOS-01: Corrupted XML Handling
+Command: /usr/bin/python3 -m pytest -v tests/test_chaos.py::test_corrupted_xml_handling
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_chaos.py::test_corrupted_xml_handling PASSED                  [100%]
+
+============================== 1 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[32/36] CHAOS-02: Malformed Token Response Handling
+Command: /usr/bin/python3 -m pytest -v tests/test_chaos.py::test_malformed_json_handling
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_chaos.py::test_malformed_json_handling PASSED                 [100%]
+
+============================== 1 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[33/36] CHAOS-03: Boundary and Malformed Inputs
+Command: /usr/bin/python3 -m pytest -v tests/test_chaos.py::test_boundary_and_malformed_inputs
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_chaos.py::test_boundary_and_malformed_inputs PASSED           [100%]
+
+============================== 1 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[34/36] CHAOS-04: USB Disconnect Simulation and Recovery
+Command: /usr/bin/python3 -m pytest -v tests/test_chaos.py::test_usb_disconnect_simulation
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_chaos.py::test_usb_disconnect_simulation PASSED               [100%]
+
+============================== 1 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[35/36] CHAOS-05: Token Lockout Prevention on Invalid PIN
+Command: /usr/bin/python3 -m pytest -v tests/test_chaos.py::test_immediate_abort_on_auth_failure
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_chaos.py::test_immediate_abort_on_auth_failure PASSED         [100%]
+
+============================== 1 passed in 0.05s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+[36/36] CHAOS-06: TUI Spam and Double-Submit Resilience
+Command: /usr/bin/python3 -m pytest -v tests/test_tui_stress.py::test_main_menu_invalid_choices_and_clean_exit
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/viz/projects/KeePass to Token2 OTP sync
+configfile: pyproject.toml
+plugins: xdist-3.8.0, anyio-4.15.1, platformdirs-4.13.5, asyncio-1.4.0, cov-6.0.0, typeguard-4.4.4
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_tui_stress.py::test_main_menu_invalid_choices_and_clean_exit PASSED [100%]
+
+============================== 1 passed in 0.08s ===============================
+Result: PASS (Exit code 0)
+
+================================================================================
+SUMMARY: Total checks: 36 | Passed: 36 | Failed: 0
+================================================================================
+STATUS: SUCCESS - All 36 checklist items verified with zero errors.

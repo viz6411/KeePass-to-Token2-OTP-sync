@@ -1,5 +1,7 @@
 """Command-line interface and Rich TUI for KeePassXC to Token2 synchronization."""
 
+from __future__ import annotations
+
 import argparse
 import getpass
 import sys
@@ -7,167 +9,50 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from .config import AppConfig, load_config
-from .diff import TOKEN2_MAX_CAPACITY, DiffResult, compute_diff
+from .config import AppConfig, get_default_config_path, load_config
+from .diff import compute_diff
 from .kpxc import KeePassXCError, read_kpxc_entries
 from .models import TOTPEntry, Token2Profile
-from .security import SecureBuffer, scrub_bytes
+from .security import scrub_bytes
 from .token2 import Token2CLIAdapter, Token2Error, Token2PINError
+from .tui import (
+    apply_sync,
+    display_diff_table,
+    find_free_slots,
+    run_interactive_menu,
+    run_main_menu,
+    run_onboarding_wizard,
+)
 
 console = Console()
 
+__all__ = [
+    "console",
+    "display_diff_table",
+    "find_free_slots",
+    "apply_sync",
+    "run_interactive_menu",
+    "run_onboarding_wizard",
+    "run_main_menu",
+    "main",
+]
 
-def display_diff_table(diff: DiffResult, total_current_slots: int) -> None:
-    """Displays formatted Rich table of differences between KeePassXC and Token2."""
-    table = Table(title="TOTP Synchronization Plan", show_header=True, header_style="bold magenta")
-    table.add_column("Action", style="bold", width=12)
-    table.add_column("Issuer", style="cyan")
-    table.add_column("Account", style="white")
-    table.add_column("Details", style="dim")
 
-    for entry in diff.to_add:
-        table.add_row(
-            "[green]+ ADD[/green]",
-            entry.issuer,
-            entry.account,
-            f"{entry.algorithm} | {entry.digits}d | {entry.period}s",
-        )
-
-    for entry, profile in diff.to_update:
-        table.add_row(
-            "[yellow]~ UPDATE[/yellow]",
-            entry.issuer,
-            entry.account,
-            f"Slot {profile.slot} -> {entry.algorithm}/{entry.digits}d/{entry.period}s",
-        )
-
-    for profile in diff.to_delete:
-        table.add_row(
-            "[red]- DELETE[/red]",
-            profile.issuer,
-            profile.account,
-            f"Slot {profile.slot} (not in KeePassXC)",
-        )
-
-    for entry in diff.skipped:
-        table.add_row(
-            "[dim]SKIP[/dim]",
-            entry.issuer,
-            entry.account,
-            f"Incompatible: {entry.algorithm}/{entry.digits}d/{entry.period}s",
-        )
-
-    console.print(table)
-
-    summary_text = (
-        f"[bold]Token2 Capacity:[/bold] {total_current_slots} / {TOKEN2_MAX_CAPACITY} slots used\n"
-        f"[green]• To Add:[/green] {len(diff.to_add)}\n"
-        f"[yellow]• To Update:[/yellow] {len(diff.to_update)}\n"
-        f"[red]• To Delete:[/red] {len(diff.to_delete)}\n"
-        f"[dim]• Incompatible / Skipped:[/dim] {len(diff.skipped)}\n"
-        f"[bold]Projected Slots After Full Sync:[/bold] {diff.final_slot_count} / {TOKEN2_MAX_CAPACITY}"
+def _has_explicit_batch_args(args: argparse.Namespace) -> bool:
+    """Checks whether explicit command-line execution parameters were passed."""
+    return bool(
+        args.kdbx is not None
+        or args.dry_run
+        or args.mode is not None
+        or args.keyfile is not None
+        or args.yubikey is not None
+        or args.yes
     )
-
-    if diff.is_capacity_exceeded:
-        summary_text += "\n\n[bold red]WARNING: Capacity limit of 300 slots would be exceeded![/bold red]"
-
-    console.print(Panel(summary_text, title="Summary", border_style="cyan"))
-
-
-def find_free_slots(occupied_slots: Sequence[int], max_capacity: int = TOKEN2_MAX_CAPACITY) -> list[int]:
-    """Returns sorted list of available slots in range 1..max_capacity."""
-    occupied = set(occupied_slots)
-    return [s for s in range(1, max_capacity + 1) if s not in occupied]
-
-
-def apply_sync(
-    adapter: Token2CLIAdapter,
-    diff: DiffResult,
-    existing_profiles: list[Token2Profile],
-    mode: str,
-    confirm_delete: bool = True,
-) -> int:
-    """Applies sync operations to the Token2 hardware token based on selected mode.
-
-    Modes:
-      - 'add_only': Only adds new entries
-      - 'add_update': Adds new entries and updates modified ones
-      - 'full_sync': Adds new, updates modified, and deletes obsolete entries
-      - 'cancel': Aborts without changes
-
-    Returns number of executed operations.
-    """
-    normalized_mode = mode.strip().lower()
-    if normalized_mode in ("cancel", "4"):
-        console.print("[yellow]Sync cancelled by user.[/yellow]")
-        return 0
-
-    if diff.is_capacity_exceeded and normalized_mode in ("add_only", "1", "add_update", "2", "full_sync", "3"):
-        raise Token2Error(
-            f"Cannot proceed: final slot count {diff.final_slot_count} exceeds hardware limit {TOKEN2_MAX_CAPACITY}"
-        )
-
-    ops_count = 0
-    occupied = {p.slot for p in existing_profiles}
-
-    # 1. Full Sync Deletions
-    if normalized_mode in ("full_sync", "3") and diff.to_delete:
-        if confirm_delete:
-            ans = console.input(
-                f"[bold red]Confirm deleting {len(diff.to_delete)} profiles from Token2? [y/N]: [/bold red]"
-            )
-            if ans.strip().lower() not in ("y", "yes"):
-                console.print("[yellow]Aborted deletion on user request.[/yellow]")
-                return ops_count
-
-        for profile in diff.to_delete:
-            console.print(f"[red]Deleting slot {profile.slot}: {profile.issuer} ({profile.account})...[/red]")
-            adapter.delete_entry(profile.slot)
-            occupied.discard(profile.slot)
-            ops_count += 1
-
-    # 2. Updates (delete old slot, then write updated entry)
-    if normalized_mode in ("add_update", "2", "full_sync", "3") and diff.to_update:
-        for entry, profile in diff.to_update:
-            console.print(f"[yellow]Updating slot {profile.slot}: {entry.issuer} ({entry.account})...[/yellow]")
-            adapter.delete_entry(profile.slot)
-            adapter.write_entry(profile.slot, entry)
-            ops_count += 1
-
-    # 3. Additions
-    if normalized_mode in ("add_only", "1", "add_update", "2", "full_sync", "3") and diff.to_add:
-        free_slots = find_free_slots(list(occupied))
-        if len(free_slots) < len(diff.to_add):
-            raise Token2Error(f"Not enough free slots: {len(free_slots)} available, {len(diff.to_add)} needed")
-
-        for entry in diff.to_add:
-            slot = free_slots.pop(0)
-            console.print(f"[green]Adding to slot {slot}: {entry.issuer} ({entry.account})...[/green]")
-            adapter.write_entry(slot, entry)
-            occupied.add(slot)
-            ops_count += 1
-
-    console.print(f"[bold green]Successfully performed {ops_count} operations.[/bold green]")
-    return ops_count
-
-
-def run_interactive_menu() -> str:
-    """Prompts user to select synchronization mode."""
-    console.print("\n[bold]Select action:[/bold]")
-    console.print("  [1] Add Only (write missing entries)")
-    console.print("  [2] Add & Update (write missing and overwrite changed entries)")
-    console.print("  [3] Full Sync (Add, Update, and delete obsolete entries)")
-    console.print("  [4] Cancel (exit without changes)")
-
-    choice = console.input("[bold cyan]Enter choice [1-4] (default: 4): [/bold cyan]").strip()
-    return choice or "4"
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Main CLI entry point."""
+    """Main CLI entry point coordinating interactive TUI vs batch execution."""
     parser = argparse.ArgumentParser(
         prog="t2-kpxc-sync",
         description="Zero-disk-footprint KeePassXC to Token2 PIN+ R3.3 TOTP synchronizer",
@@ -183,11 +68,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Non-interactive execution mode",
     )
     parser.add_argument("-y", "--yes", action="store_true", help="Confirm deletions without prompting")
+    parser.add_argument("--tui", action="store_true", help="Launch interactive TUI management interface")
 
     args = parser.parse_args(argv)
 
     cfg: AppConfig = load_config(args.config)
+    target_config_path = Path(args.config) if args.config else get_default_config_path()
 
+    has_batch_args = _has_explicit_batch_args(args)
+    is_interactive_tty = getattr(sys.stdin, "isatty", lambda: False)()
+
+    # Route to interactive TUI if explicitly requested (--tui) OR if launched without batch args in interactive TTY
+    if args.tui or (not has_batch_args and is_interactive_tty):
+        if args.kdbx:
+            cfg.keepassxc.database_path = str(args.kdbx)
+
+        # First-run onboarding if config missing or database_path not set
+        if not target_config_path.exists() or not cfg.keepassxc.database_path.strip():
+            try:
+                cfg = run_onboarding_wizard(config_path=target_config_path, con=console)
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[yellow]Setup cancelled by user.[/yellow]")
+                return 0
+            except Exception as err:
+                console.print(f"[bold red]Onboarding error: {err}[/bold red]")
+                return 1
+
+        try:
+            run_main_menu(cfg, config_path=target_config_path, con=console)
+            return 0
+        except (KeyboardInterrupt, EOFError):
+            return 0
+
+    # Batch / Non-Interactive CLI execution flow (100% backward compatible)
     db_path = args.kdbx or (Path(cfg.keepassxc.database_path) if cfg.keepassxc.database_path else None)
     if not db_path:
         console.print("[bold red]Error: No KeePassXC database specified. Use --db or configure config.toml[/bold red]")
@@ -196,7 +109,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     keyfile_path = args.keyfile or (Path(cfg.keepassxc.keyfile_path) if cfg.keepassxc.keyfile_path else None)
     yubikey_slot = args.yubikey or cfg.keepassxc.yubikey_slot or None
 
-    # Prompt passwords securely in memory
     password_buf: bytearray | None = None
     pin_buf: bytearray | None = None
 
@@ -241,7 +153,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         # Diff computation
         diff = compute_diff(kpxc_entries, token_profiles)
-        display_diff_table(diff, total_current_slots=len(token_profiles))
+        display_diff_table(diff, total_current_slots=len(token_profiles), con=console)
 
         if diff.duplicates:
             console.print(f"[bold yellow]Warning: {len(diff.duplicates)} duplicate entries detected in KeePassXC![/bold yellow]")
@@ -258,7 +170,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             console.print("[bold red]Error: Token capacity (300 slots) exceeded. Synchronisation cannot continue.[/bold red]")
             return 1
 
-        mode = args.mode or run_interactive_menu()
+        mode = args.mode or run_interactive_menu(con=console)
         confirm_delete = not args.yes
 
         try:
@@ -268,6 +180,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 existing_profiles=token_profiles,
                 mode=mode,
                 confirm_delete=confirm_delete,
+                con=console,
             )
         finally:
             adapter.close()

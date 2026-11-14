@@ -41,6 +41,7 @@ def test_argv_leak_prevention(tmp_path):
             db_path=dummy_db,
             password=secret_password,
             cli_binary="keepassxc-cli",
+            backend="cli",
         )
 
         assert mock_run.called

@@ -2,31 +2,40 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "KeePassXC to Token2 PIN+ R3.3 Sync — Архитектура",
+    "title": "KeePassXC to Token2 PIN+ R3.3 Sync — Архитектура v0.2.0",
     "quality_profile": "showcase",
     "views": [
       {
         "id": "sync-flow",
         "label": "Поток синхронизации",
-        "focus": ["user", "launcher", "cli", "diff", "kpxc_adapter", "token2_adapter", "kpxc_db", "token2_key"],
-        "note": "Сквозной процесс от запуска до записи профилей на физический токен."
+        "focus": ["user", "launcher", "cli", "file_picker", "diff", "kpxc_adapter", "token2_adapter", "token2_crypto", "kpxc_db", "token2_key"],
+        "note": "Сквозной процесс от запуска через TUI Onboarding Wizard до записи профилей на токен через pykeepass и USB-HID."
       },
       {
         "id": "security-ram",
         "label": "Безопасность памяти",
-        "focus": ["security", "kpxc_adapter", "cli", "kpxc_db"],
-        "note": "Изоляция секретов в оперативной памяти и зануление буферов."
+        "focus": ["security", "token2_crypto", "kpxc_adapter", "cli", "kpxc_db", "token2_adapter"],
+        "note": "Изоляция секретов в оперативной памяти, эфемерные ключи NIST P-256 ECDH и зануление буферов."
+      },
+      {
+        "id": "packaging",
+        "label": "Автономная сборка",
+        "focus": ["packager", "launcher", "cli"],
+        "note": "PyInstaller сборка автономного исполняемого файла (.exe / ELF) и portable ZIP архива."
       }
     ]
   },
   "components": [
     { "id": "user", "type": "external", "label": "Пользователь", "sublabel": "Терминал / PIN / Пароль", "pos": [50, 240], "size": [130, 60] },
-    { "id": "launcher", "type": "frontend", "label": "Launcher", "sublabel": "One-Click (.bat / .sh)", "pos": [280, 240], "size": [140, 60] },
-    { "id": "cli", "type": "backend", "label": "CLI & Rich TUI", "sublabel": "Сводка & Интерактив", "pos": [540, 240], "size": [140, 60] },
-    { "id": "security", "type": "security", "label": "Security & RAM", "sublabel": "Zero-Disk & bytearray", "pos": [540, 80], "size": [140, 60] },
+    { "id": "packager", "type": "backend", "label": "PyInstaller Spec", "sublabel": "Standalone .exe / ELF", "pos": [280, 80], "size": [150, 60] },
+    { "id": "launcher", "type": "frontend", "label": "Smart Launcher", "sublabel": "One-Click (.bat / .sh)", "pos": [280, 240], "size": [150, 60] },
+    { "id": "file_picker", "type": "frontend", "label": "Native File Picker", "sublabel": "PowerShell / zenity / CLI", "pos": [280, 420], "size": [150, 60] },
+    { "id": "cli", "type": "backend", "label": "TUI & Wizard", "sublabel": "Onboarding & Меню [1-4]", "pos": [540, 240], "size": [140, 60] },
+    { "id": "security", "type": "security", "label": "Security & RAM", "sublabel": "Zero-Disk & scrub_bytes", "pos": [540, 80], "size": [140, 60] },
+    { "id": "token2_crypto", "type": "security", "label": "Crypto Engine", "sublabel": "NIST P-256 & AES-CBC", "pos": [540, 420], "size": [140, 60] },
     { "id": "diff", "type": "backend", "label": "Diff Engine", "sublabel": "300 slots & live TOTP match", "pos": [800, 240], "size": [160, 60] },
-    { "id": "kpxc_adapter", "type": "backend", "label": "KPXC Reader", "sublabel": "keepassxc-cli pipe (RAM)", "pos": [800, 80], "size": [160, 60] },
-    { "id": "token2_adapter", "type": "backend", "label": "Token2 Adapter", "sublabel": "token2-otp-cli JSON runner", "pos": [800, 420], "size": [160, 60] },
+    { "id": "kpxc_adapter", "type": "backend", "label": "Direct KDBX Reader", "sublabel": "pykeepass (RAM) + CLI Fallback", "pos": [800, 80], "size": [160, 60] },
+    { "id": "token2_adapter", "type": "backend", "label": "Token2 Driver", "sublabel": "Embedded hidapi & APDU", "pos": [800, 420], "size": [160, 60] },
     { "id": "kpxc_db", "type": "database", "label": "KeePassXC (.kdbx)", "sublabel": "Строго Read-Only", "pos": [1080, 80], "size": [150, 60] },
     { "id": "token2_key", "type": "external", "label": "Token2 PIN+ R3.3", "sublabel": "Аппаратный USB-токен", "pos": [1080, 420], "size": [150, 60] }
   ],
@@ -34,17 +43,20 @@
     {
       "kind": "region",
       "label": "Host RAM (Zero-Disk-Footprint)",
-      "wraps": ["cli", "diff", "security", "kpxc_adapter", "token2_adapter"]
+      "wraps": ["cli", "diff", "security", "token2_crypto", "kpxc_adapter", "token2_adapter"]
     }
   ],
   "connections": [
     { "id": "user-launcher", "from": "user", "to": "launcher", "label": "Запуск в 1 клик", "variant": "emphasis", "labelDy": -20 },
+    { "id": "packager-launcher", "from": "packager", "to": "launcher", "label": "Bundle", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
     { "id": "launcher-cli", "from": "launcher", "to": "cli", "label": "t2_kpxc_sync", "labelDy": -20 },
+    { "id": "cli-picker", "from": "cli", "to": "file_picker", "label": "Обзор", "variant": "dashed", "fromSide": "left", "toSide": "top" },
     { "id": "cli-security", "from": "cli", "to": "security", "label": "scrub", "variant": "dashed", "fromSide": "top", "toSide": "bottom", "labelDx": 20 },
     { "id": "cli-diff", "from": "cli", "to": "diff", "label": "Сверка", "labelDy": -20 },
     { "id": "diff-kpxc", "from": "diff", "to": "kpxc_adapter", "label": "Запрос TOTP", "fromSide": "top", "toSide": "bottom", "labelDx": 25 },
-    { "id": "diff-token2", "from": "diff", "to": "token2_adapter", "label": "CLI sync", "fromSide": "bottom", "toSide": "top", "labelAt": [910, 350] },
-    { "id": "kpxc-db", "from": "kpxc_adapter", "to": "kpxc_db", "label": "pipe (Read-Only)", "variant": "emphasis", "labelDy": -20 },
-    { "id": "token2-hw", "from": "token2_adapter", "to": "token2_key", "label": "USB HID / CCID", "variant": "emphasis", "labelDy": -20 }
+    { "id": "diff-token2", "from": "diff", "to": "token2_adapter", "label": "Direct / CLI", "fromSide": "bottom", "toSide": "top", "labelAt": [910, 350] },
+    { "id": "adapter-crypto", "from": "token2_adapter", "to": "token2_crypto", "label": "ECDH + AES", "variant": "dashed", "fromSide": "left", "toSide": "right", "labelDy": -20 },
+    { "id": "kpxc-db", "from": "kpxc_adapter", "to": "kpxc_db", "label": "RAM (Read-Only)", "variant": "emphasis", "labelDy": -20 },
+    { "id": "token2-hw", "from": "token2_adapter", "to": "token2_key", "label": "USB HID (65B Reports)", "variant": "emphasis", "labelDy": -20 }
   ]
 }
