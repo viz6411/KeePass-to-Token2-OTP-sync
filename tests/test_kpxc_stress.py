@@ -529,3 +529,65 @@ def test_stress_vault_with_mixed_hostile_entries(tmp_path):
     assert "HotpEntry" not in extracted_titles
     assert "BadB32Entry" not in extracted_titles
     assert "RegularLogin" not in extracted_titles
+
+
+def test_large_vault_hundreds_of_entries_with_quotes_and_special_keys(tmp_path):
+    """Simulates real-world user scenario: large database with hundreds of entries
+
+    and dozens of TOTP records, containing custom properties with quotes and special chars.
+    """
+    import pykeepass
+    from lxml.builder import E
+
+    db_path = tmp_path / "large_realworld_vault.kdbx"
+    kp = pykeepass.create_database(filename=str(db_path), password="user-master-pass")
+
+    # Fast Argon2 tuning for test speed
+    hdr_dict = kp.kdbx.header.value.dynamic_header.kdf_parameters.data.dict
+    if "I" in hdr_dict and "M" in hdr_dict:
+        hdr_dict["I"].value = 1
+        hdr_dict["M"].value = 65536
+
+    # Create 30 TOTP entries and 170 non-TOTP entries (total 200 entries)
+    totp_indices = set(range(0, 200, 7))  # ~29 TOTP entries
+
+    hostile_keys = [
+        'field"with"doublequote',
+        'key\'with\'singlequote',
+        'field[0][data]',
+        'custom:schema/uri',
+        'tag<script>alert(1)</script>',
+        'emoji_🚀_field',
+        'json_data_{"a":1}',
+        'sql_\' OR \'1\'=\'1',
+    ]
+
+    expected_totp_count = 0
+    for i in range(200):
+        title = f"Service-{i:03d}"
+        username = f"user_{i}@domain.com"
+        entry = kp.add_entry(kp.root_group, title=title, username=username, password=f"pass_{i}")
+
+        # Inject hostile custom fields into every entry
+        hkey = hostile_keys[i % len(hostile_keys)]
+        entry._element.append(E.String(E.Key(hkey), E.Value(f"val_{i}_{hkey}")))
+
+        if i in totp_indices:
+            expected_totp_count += 1
+            if i % 2 == 0:
+                entry.otp = f"otpauth://totp/{title}:{username}?secret=JBSWY3DPEHPK3PXP&issuer={title}"
+            else:
+                entry._element.append(E.String(E.Key("totp seed"), E.Value("KVKFKRCPNZQUYMLX")))
+                entry._element.append(E.String(E.Key("totp settings"), E.Value("30;6;SHA1")))
+
+    kp.save()
+
+    # Direct in-memory extraction
+    extracted = read_kdbx_direct(db_path, password="user-master-pass")
+
+    assert len(extracted) == expected_totp_count
+    for item in extracted:
+        assert item.secret in ("JBSWY3DPEHPK3PXP", "KVKFKRCPNZQUYMLX")
+        assert item.period == 30
+        assert item.digits == 6
+

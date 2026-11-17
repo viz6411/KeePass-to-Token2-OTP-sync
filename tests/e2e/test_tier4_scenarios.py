@@ -36,17 +36,18 @@ def test_t4_scenario_fresh_onboarding_to_full_sync(
     vault = tmp_path / "fresh_vault.kdbx"
     kp = KDBXFactory.create_vault(vault, password="MasterPassword123!")
 
+    # Secrets use standard 32-char (160-bit) Base32 encoding for full NIST SP 800-63B-4 / pyotp compliance
     accounts = [
-        ("GitHub", "dev1", "JBSWY3DPEHPK3PXP", "SHA1", 6, 30),
-        ("AWS", "admin", "GEZDGNBVGY3TQOJQ", "SHA256", 8, 60),
-        ("GitLab", "secops", "MFRGGZDFMZTWQ2LK", "SHA1", 6, 30),
-        ("Google", "user@gmail.com", "KVKFKRCPNZQUYMLX", "SHA1", 6, 30),
-        ("Cloudflare", "infra", "OVYGYZDFMFRGGZDF", "SHA1", 6, 30),
-        ("DigitalOcean", "deploy", "JBSWY3DPEHPK3PXP", "SHA1", 6, 30),
-        ("Atlassian", "pm", "GEZDGNBVGY3TQOJQ", "SHA256", 6, 30),
-        ("Slack", "worker", "MFRGGZDFMZTWQ2LK", "SHA1", 6, 30),
-        ("Bitbucket", "repo", "KVKFKRCPNZQUYMLX", "SHA1", 6, 30),
-        ("Salesforce", "sales", "OVYGYZDFMFRGGZDF", "SHA1", 6, 30),
+        ("GitHub", "dev1", "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", "SHA1", 6, 30),
+        ("AWS", "admin", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "SHA256", 8, 60),
+        ("GitLab", "secops", "MFRGGZDFMZTWQ2LKMFRGGZDFMZTWQ2LK", "SHA1", 6, 30),
+        ("Google", "user@gmail.com", "KVKFKRCPNZQUYMLXKVKFKRCPNZQUYMLX", "SHA1", 6, 30),
+        ("Cloudflare", "infra", "OVYGYZDFMFRGGZDFOVYGYZDFMFRGGZDF", "SHA1", 6, 30),
+        ("DigitalOcean", "deploy", "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", "SHA1", 6, 30),
+        ("Atlassian", "pm", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "SHA256", 6, 30),
+        ("Slack", "worker", "MFRGGZDFMZTWQ2LKMFRGGZDFMZTWQ2LK", "SHA1", 6, 30),
+        ("Bitbucket", "repo", "KVKFKRCPNZQUYMLXKVKFKRCPNZQUYMLX", "SHA1", 6, 30),
+        ("Salesforce", "sales", "OVYGYZDFMFRGGZDFOVYGYZDFMFRGGZDF", "SHA1", 6, 30),
     ]
 
     for title, user, secret, algo, digits, period in accounts:

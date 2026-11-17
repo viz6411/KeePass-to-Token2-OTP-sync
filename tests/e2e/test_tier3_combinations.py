@@ -156,20 +156,20 @@ def test_t3_cross_secret_normalization_and_pyotp_validation(tmp_path: Path):
     vault = tmp_path / "secrets.kdbx"
     kp = KDBXFactory.create_vault(vault, password="pwd")
 
-    # Lowercase with spaces
+    # Lowercase with spaces (32 chars / 160 bits for NIST SP 800-63B-4 / pyotp compatibility)
     KDBXFactory.add_otpauth_entry(
         kp,
         title="MessyService",
         username="user",
-        secret="jbsw y3dp ehpk 3pxp",
+        secret="jbsw y3dp ehpk 3pxp jbsw y3dp ehpk 3pxp",
         save=False,
     )
-    # Unpadded base32 secret
+    # Unpadded base32 secret (32 chars / 160 bits)
     KDBXFactory.add_timeotp_entry(
         kp,
         title="UnpaddedService",
         username="user2",
-        secret="GEZDGNBVGY3TQOJQ",
+        secret="GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
         save=False,
     )
     kp.save()

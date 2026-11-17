@@ -2,6 +2,7 @@
 
 import base64
 import gc
+import logging
 import subprocess
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -10,6 +11,8 @@ from typing import Optional, Sequence
 
 from .models import TOTPEntry
 from .security import scrub_bytes
+
+logger = logging.getLogger(__name__)
 
 
 class KeePassXCError(Exception):
@@ -170,13 +173,82 @@ def parse_otpauth_uri(
         return None
 
 
+def _clean_tag(tag: str) -> str:
+    """Strips XML namespace from tag name."""
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    return tag
+
+
+def get_entry_strings(entry) -> dict[str, str]:
+    """Safely extracts all string key-value pairs from an entry.
+
+    Directly traverses underlying XML element children if present, bypassing
+    pykeepass's XPath-based custom_properties getter which fails with
+    `lxml.etree.XPathEvalError: Invalid predicate` on keys containing
+    quotes, double quotes, brackets, or regex special characters.
+    """
+    strings: dict[str, str] = {}
+
+    # 1. Primary path: directly traverse XML element children if present
+    elem = getattr(entry, "_element", None)
+    if elem is not None:
+        try:
+            for child in elem:
+                if _clean_tag(child.tag) == "String":
+                    k_text: Optional[str] = None
+                    v_text: Optional[str] = None
+                    for str_child in child:
+                        c_tag = _clean_tag(str_child.tag)
+                        if c_tag == "Key":
+                            k_text = str_child.text or ""
+                        elif c_tag == "Value":
+                            v_text = str_child.text or ""
+                    if k_text:
+                        strings[k_text] = v_text or ""
+        except Exception:
+            pass
+
+    # 2. Fallback path: for MockEntry objects or non-XML implementations
+    if not strings:
+        try:
+            custom_props = getattr(entry, "custom_properties", None)
+            if custom_props and isinstance(custom_props, dict):
+                for k, v in custom_props.items():
+                    if k is not None and v is not None:
+                        strings[str(k)] = str(v)
+        except Exception:
+            pass
+
+    return strings
+
+
 def extract_totp_from_entry(entry) -> Optional[TOTPEntry]:
     """Extracts TOTPEntry from a pykeepass.entry.Entry supporting all known schemas."""
-    title = (getattr(entry, "title", None) or "").strip()
-    username = (getattr(entry, "username", None) or "").strip()
+    strings = get_entry_strings(entry)
+
+    # Title & Username with safe fallback to strings dict
+    title = ""
+    try:
+        title = (getattr(entry, "title", None) or strings.get("Title") or "").strip()
+    except Exception:
+        title = (strings.get("Title") or "").strip()
+
+    username = ""
+    try:
+        username = (getattr(entry, "username", None) or strings.get("UserName") or "").strip()
+    except Exception:
+        username = (strings.get("UserName") or "").strip()
 
     # 1. Standard entry.otp field
-    entry_otp = getattr(entry, "otp", None)
+    entry_otp = None
+    try:
+        entry_otp = getattr(entry, "otp", None)
+    except Exception:
+        pass
+    if not entry_otp:
+        entry_otp = strings.get("otp") or strings.get("OTP")
+
     if entry_otp and isinstance(entry_otp, str):
         otp_str = entry_otp.strip()
         if otp_str.lower().startswith("otpauth://totp/"):
@@ -207,106 +279,104 @@ def extract_totp_from_entry(entry) -> Optional[TOTPEntry]:
                     period=p,
                 )
 
-    # 2. Inspect entry.custom_properties with case-insensitive normalization
-    custom_props = getattr(entry, "custom_properties", None)
-    if custom_props and isinstance(custom_props, dict):
-        norm_props = {
-            str(k).strip().lower(): str(v).strip()
-            for k, v in custom_props.items()
-            if k is not None and v is not None
-        }
+    # 2. Inspect entry custom properties with case-insensitive normalization
+    norm_props = {
+        str(k).strip().lower(): str(v).strip()
+        for k, v in strings.items()
+        if k is not None and v is not None
+    }
 
-        # Case where OTP was stored in custom property 'OTP' or 'otp'
-        if "otp" in norm_props:
-            custom_otp = norm_props["otp"]
-            if custom_otp.lower().startswith("otpauth://totp/"):
-                res = parse_otpauth_uri(custom_otp, fallback_title=title, fallback_user=username)
-                if res:
-                    return res
-            elif custom_otp.lower().startswith("otpauth://hotp/"):
-                return None
-            elif "key=" in custom_otp:
-                qs = urllib.parse.parse_qs(custom_otp)
-                sec = clean_base32(qs.get("key", [""])[0])
-                if sec:
-                    try:
-                        p = int(qs.get("step", ["30"])[0])
-                    except (ValueError, TypeError):
-                        p = 30
-                    try:
-                        d = int(qs.get("size", ["6"])[0])
-                    except (ValueError, TypeError):
-                        d = 6
-                    algo = normalize_algorithm(qs.get("enc", ["SHA1"])[0])
-                    return TOTPEntry(
-                        issuer=title or username or "Unknown",
-                        account=username or title or "Unknown",
-                        secret=sec,
-                        algorithm=algo,
-                        digits=d,
-                        period=p,
-                    )
-
-        # Native KeePass 2.47+ / KeeTrayTOTP properties
-        raw_sec = (
-            norm_props.get("timeotp-secret-base32")
-            or norm_props.get("totp seed")
-            or norm_props.get("timeotp-secret")
-            or norm_props.get("otp-secret")
-            or norm_props.get("totp-secret")
-        )
-        if raw_sec:
-            clean_sec = clean_base32(raw_sec)
-            if clean_sec:
-                sett_period, sett_digits, sett_algo = parse_totp_settings(norm_props.get("totp settings", ""))
-                raw_period = (
-                    norm_props.get("timeotp-period")
-                    or norm_props.get("otp-period")
-                    or norm_props.get("totp-period")
-                )
-                if raw_period:
-                    try:
-                        period = int(raw_period)
-                    except (ValueError, TypeError):
-                        period = sett_period
-                else:
-                    period = sett_period
-
-                raw_digits = (
-                    norm_props.get("timeotp-length")
-                    or norm_props.get("timeotp-digits")
-                    or norm_props.get("otp-length")
-                    or norm_props.get("totp-digits")
-                )
-                if raw_digits:
-                    try:
-                        digits = int(raw_digits)
-                    except (ValueError, TypeError):
-                        digits = sett_digits
-                else:
-                    digits = sett_digits
-
-                raw_algo = (
-                    norm_props.get("timeotp-algorithm")
-                    or norm_props.get("otp-algorithm")
-                    or norm_props.get("totp-algorithm")
-                )
-                if raw_algo:
-                    algorithm = normalize_algorithm(raw_algo)
-                else:
-                    algorithm = sett_algo
-
-                issuer = title or username or "Unknown"
-                account = username or title or "Unknown"
-
+    # Case where OTP was stored in custom property 'OTP' or 'otp'
+    if "otp" in norm_props:
+        custom_otp = norm_props["otp"]
+        if custom_otp.lower().startswith("otpauth://totp/"):
+            res = parse_otpauth_uri(custom_otp, fallback_title=title, fallback_user=username)
+            if res:
+                return res
+        elif custom_otp.lower().startswith("otpauth://hotp/"):
+            return None
+        elif "key=" in custom_otp:
+            qs = urllib.parse.parse_qs(custom_otp)
+            sec = clean_base32(qs.get("key", [""])[0])
+            if sec:
+                try:
+                    p = int(qs.get("step", ["30"])[0])
+                except (ValueError, TypeError):
+                    p = 30
+                try:
+                    d = int(qs.get("size", ["6"])[0])
+                except (ValueError, TypeError):
+                    d = 6
+                algo = normalize_algorithm(qs.get("enc", ["SHA1"])[0])
                 return TOTPEntry(
-                    issuer=issuer,
-                    account=account,
-                    secret=clean_sec,
-                    algorithm=algorithm,
-                    digits=digits,
-                    period=period,
+                    issuer=title or username or "Unknown",
+                    account=username or title or "Unknown",
+                    secret=sec,
+                    algorithm=algo,
+                    digits=d,
+                    period=p,
                 )
+
+    # Native KeePass 2.47+ / KeeTrayTOTP properties
+    raw_sec = (
+        norm_props.get("timeotp-secret-base32")
+        or norm_props.get("totp seed")
+        or norm_props.get("timeotp-secret")
+        or norm_props.get("otp-secret")
+        or norm_props.get("totp-secret")
+    )
+    if raw_sec:
+        clean_sec = clean_base32(raw_sec)
+        if clean_sec:
+            sett_period, sett_digits, sett_algo = parse_totp_settings(norm_props.get("totp settings", ""))
+            raw_period = (
+                norm_props.get("timeotp-period")
+                or norm_props.get("otp-period")
+                or norm_props.get("totp-period")
+            )
+            if raw_period:
+                try:
+                    period = int(raw_period)
+                except (ValueError, TypeError):
+                    period = sett_period
+            else:
+                period = sett_period
+
+            raw_digits = (
+                norm_props.get("timeotp-length")
+                or norm_props.get("timeotp-digits")
+                or norm_props.get("otp-length")
+                or norm_props.get("totp-digits")
+            )
+            if raw_digits:
+                try:
+                    digits = int(raw_digits)
+                except (ValueError, TypeError):
+                    digits = sett_digits
+            else:
+                digits = sett_digits
+
+            raw_algo = (
+                norm_props.get("timeotp-algorithm")
+                or norm_props.get("otp-algorithm")
+                or norm_props.get("totp-algorithm")
+            )
+            if raw_algo:
+                algorithm = normalize_algorithm(raw_algo)
+            else:
+                algorithm = sett_algo
+
+            issuer = title or username or "Unknown"
+            account = username or title or "Unknown"
+
+            return TOTPEntry(
+                issuer=issuer,
+                account=account,
+                secret=clean_sec,
+                algorithm=algorithm,
+                digits=digits,
+                period=period,
+            )
 
     return None
 
@@ -318,39 +388,38 @@ def is_entry_excluded(
     recycle_bin_name: Optional[str] = None,
 ) -> bool:
     """Checks whether an entry is inside an excluded group or the Recycle Bin."""
-    # 1. Ancestor group traversal
-    grp = getattr(entry, "parentgroup", None)
-    while grp is not None and not getattr(grp, "is_root_group", False):
-        if recycle_bin_uuid and getattr(grp, "uuid", None) == recycle_bin_uuid:
-            return True
-        grp_name = getattr(grp, "name", None)
-        if grp_name:
-            gname_clean = grp_name.strip().lower()
-            if gname_clean in normalized_excluded:
+    try:
+        # 1. Ancestor group traversal
+        grp = getattr(entry, "parentgroup", None)
+        while grp is not None and not getattr(grp, "is_root_group", False):
+            if recycle_bin_uuid and getattr(grp, "uuid", None) == recycle_bin_uuid:
                 return True
-            if recycle_bin_name and gname_clean == recycle_bin_name:
-                return True
-        grp = getattr(grp, "parentgroup", None)
+            grp_name = getattr(grp, "name", None)
+            if grp_name:
+                gname_clean = grp_name.strip().lower()
+                if gname_clean in normalized_excluded:
+                    return True
+                if recycle_bin_name and gname_clean == recycle_bin_name:
+                    return True
+            grp = getattr(grp, "parentgroup", None)
+    except Exception:
+        pass
 
-    # 2. Path verification (guarding entry.path is not None)
-    entry_path = getattr(entry, "path", None)
-    if entry_path and isinstance(entry_path, list) and len(entry_path) > 1:
-        for gname in entry_path[:-1]:
-            if gname:
-                gclean = str(gname).strip().lower()
-                if gclean in normalized_excluded:
-                    return True
-                if recycle_bin_name and gclean == recycle_bin_name:
-                    return True
+    try:
+        # 2. Path verification (guarding entry.path is not None)
+        entry_path = getattr(entry, "path", None)
+        if entry_path and isinstance(entry_path, list) and len(entry_path) > 1:
+            for gname in entry_path[:-1]:
+                if gname:
+                    gclean = str(gname).strip().lower()
+                    if gclean in normalized_excluded:
+                        return True
+                    if recycle_bin_name and gclean == recycle_bin_name:
+                        return True
+    except Exception:
+        pass
 
     return False
-
-
-def _clean_tag(tag: str) -> str:
-    """Strips XML namespace from tag name."""
-    if "}" in tag:
-        return tag.split("}", 1)[1]
-    return tag
 
 
 def parse_kpxc_xml(
@@ -540,11 +609,15 @@ def read_kdbx_direct(
         totp_entries: list[TOTPEntry] = []
         try:
             for entry in kp.entries:
-                if is_entry_excluded(entry, norm_excluded, recycle_bin_uuid, recycle_bin_name):
+                try:
+                    if is_entry_excluded(entry, norm_excluded, recycle_bin_uuid, recycle_bin_name):
+                        continue
+                    parsed = extract_totp_from_entry(entry)
+                    if parsed is not None:
+                        totp_entries.append(parsed)
+                except Exception as entry_err:
+                    logger.debug("Skipping unparseable or corrupted entry: %s", entry_err)
                     continue
-                parsed = extract_totp_from_entry(entry)
-                if parsed is not None:
-                    totp_entries.append(parsed)
         except (AttributeError, Exception) as err:
             raise KeePassCorruptedError(f"Corrupted KeePass database structure or payload: {err}") from err
 

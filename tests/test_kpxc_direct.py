@@ -711,3 +711,118 @@ def test_hybrid_routing_invalid_backend_raises(tmp_path):
     db = make_test_vault(tmp_path / "route6.kdbx")
     with pytest.raises(ValueError, match="Invalid backend"):
         read_kpxc_entries(db, password="p", backend="unsupported_backend")
+
+
+# ==============================================================================
+# Group J: XPath Hardening & Direct DOM Inspection (v0.3.1 Hotfix)
+# ==============================================================================
+
+def test_kdbx_entries_with_quotes_in_custom_properties_xpath_hardening(tmp_path):
+    """Verifies that entries with quotes, double quotes, and special characters
+
+    in custom properties do not trigger pykeepass XPathEvalError: Invalid predicate.
+    """
+    from lxml.builder import E
+
+    vault_path = tmp_path / "xpath_hardening.kdbx"
+    kp = pykeepass.create_database(
+        filename=str(vault_path),
+        password="test-password",
+    )
+
+    # 1. Entry with standard OTP and custom properties containing quotes
+    e1 = kp.add_entry(kp.root_group, "Google Account", "user1@gmail.com", "pass1")
+    e1.otp = "otpauth://totp/Google:user1@gmail.com?secret=JBSWY3DPEHPK3PXP&issuer=Google"
+    e1._element.append(E.String(E.Key('custom"quote'), E.Value('val1"quotes')))
+    e1._element.append(E.String(E.Key("single'quote"), E.Value("val2'quotes")))
+    e1._element.append(E.String(E.Key("bracket[test]"), E.Value("val3[bracket]")))
+    e1._element.append(E.String(E.Key('{"json":"key"}'), E.Value('{"json":"val"}')))
+
+    # 2. Entry with KeeTrayTOTP properties and hostile custom property key
+    e2 = kp.add_entry(kp.root_group, "GitHub Account", "user2", "pass2")
+    e2._element.append(E.String(E.Key("totp seed"), E.Value("KVKFKRCPNZQUYMLX")))
+    e2._element.append(E.String(E.Key("totp settings"), E.Value("30;8;SHA256")))
+    e2._element.append(E.String(E.Key('quoted"setting"key'), E.Value('quoted"val')))
+
+    # 3. Non-TOTP entry with quotes in custom field
+    e3 = kp.add_entry(kp.root_group, "Bank Portal", "bank_user", "pass3")
+    e3._element.append(E.String(E.Key('security"question"1'), E.Value('Answer"with"quotes')))
+
+    # 4. Entry with custom OTP query string and hostile XML tag characters in key
+    e4 = kp.add_entry(kp.root_group, "AWS Console", "admin", "pass4")
+    e4._element.append(E.String(E.Key("otp"), E.Value("key=JBSWY3DPEHPK3PXP&step=60&size=6&enc=SHA512")))
+    e4._element.append(E.String(E.Key("special!@#$%^&*()_+-=[]{}|;':,./<>?"), E.Value("safe")))
+
+    kp.save()
+
+    # Read back using direct in-memory reader
+    entries = read_kdbx_direct(vault_path, password="test-password")
+
+    assert len(entries) == 3
+
+    # Check e1
+    ent1 = next((e for e in entries if e.issuer == "Google"), None)
+    assert ent1 is not None
+    assert ent1.account == "user1@gmail.com"
+    assert ent1.secret == "JBSWY3DPEHPK3PXP"
+    assert ent1.digits == 6
+    assert ent1.period == 30
+
+    # Check e2
+    ent2 = next((e for e in entries if e.issuer == "GitHub Account"), None)
+    assert ent2 is not None
+    assert ent2.secret == "KVKFKRCPNZQUYMLX"
+    assert ent2.digits == 8
+    assert ent2.algorithm == "SHA256"
+
+    # Check e4
+    ent4 = next((e for e in entries if e.issuer == "AWS Console"), None)
+    assert ent4 is not None
+    assert ent4.secret == "JBSWY3DPEHPK3PXP"
+    assert ent4.period == 60
+    assert ent4.algorithm == "SHA512"
+
+
+def test_kdbx_direct_per_entry_error_isolation(tmp_path):
+    """Verifies that an unhandled exception in an individual corrupted entry
+
+    is safely isolated and does not abort reading remaining valid entries.
+    """
+    from lxml.builder import E
+
+    vault_path = tmp_path / "error_isolation.kdbx"
+    kp = pykeepass.create_database(
+        filename=str(vault_path),
+        password="test-password",
+    )
+
+    # 1. Valid entry 1
+    e1 = kp.add_entry(kp.root_group, "Valid 1", "u1", "p1")
+    e1.otp = "otpauth://totp/Valid1?secret=JBSWY3DPEHPK3PXP"
+
+    # 2. Entry 2 (will have extract_totp_from_entry raise artificially)
+    e2 = kp.add_entry(kp.root_group, "Corrupted Entry", "u2", "p2")
+    e2.otp = "otpauth://totp/Corrupted?secret=JBSWY3DPEHPK3PXP"
+
+    # 3. Valid entry 3
+    e3 = kp.add_entry(kp.root_group, "Valid 2", "u3", "p3")
+    e3.otp = "otpauth://totp/Valid2?secret=KVKFKRCPNZQUYMLX"
+
+    kp.save()
+
+    real_extract = extract_totp_from_entry
+
+    def mock_extract(entry):
+        if getattr(entry, "title", None) == "Corrupted Entry":
+            raise RuntimeError("Simulated entry payload memory corruption")
+        return real_extract(entry)
+
+    with patch("t2_kpxc_sync.kpxc.extract_totp_from_entry", side_effect=mock_extract):
+        entries = read_kdbx_direct(vault_path, password="test-password")
+
+    # Should have recovered and returned the two valid entries
+    assert len(entries) == 2
+    issuers = {e.issuer for e in entries}
+    assert "Valid 1" in issuers
+    assert "Valid 2" in issuers
+

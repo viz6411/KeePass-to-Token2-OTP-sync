@@ -204,5 +204,25 @@
   - *Evidence*: `python3 -m pytest` (403 passed)
   - *Manual Evidence*: [manual-20261114-v030-results.txt](file:///home/viz/projects/KeePass%20to%20Token2%20OTP%20sync/docs/testing/manual-20261114-v030-results.txt)
 
+---
+
+## 12. Верификация хотфикса v0.3.1 (KeePass XPath Hardening & Custom Attribute Direct DOM Inspection)
+- [x] **KDBX-01**: Безопасное извлечение строковых атрибутов записи (`get_entry_strings(entry)`) через прямой обход DOM (`entry._element`), исключая вызов уязвимого свойства `entry.custom_properties` из `pykeepass`.
+  - *Expected*: Строковые атрибуты записей (включая кастомные поля) считываются напрямую из дерева элементов без генерации XPath-запросов и без интерполяции строк вида `String/Key[text()="{}"]`.
+  - *Evidence*: `src/t2_kpxc_sync/kpxc.py` (`get_entry_strings`, `extract_totp_from_entry`)
+- [x] **KDBX-02**: Полная устойчивость к кавычкам (`"`, `'`), спецсимволам, квадратным скобкам и знакам препинания в ключах кастомных полей.
+  - *Expected*: База данных с записями, содержащими `custom"quote`, `field'name`, `[test]`, `<tag>` и т.д., считывается без исключения `lxml.etree.XPathEvalError: Invalid predicate` / `KeePassCorruptedError`.
+  - *Evidence*: `tests/test_kpxc_direct.py`, `tests/test_kpxc_stress.py`
+- [x] **KDBX-03**: Изоляция исключений на уровне отдельных записей в `read_kdbx_direct`.
+  - *Expected*: Если отдельная запись повреждена или вызывает ошибку парсинга, парсер логирует предупреждение и продолжает сканирование остальных сотен записей базы, предотвращая срыв всей сессии синхронизации.
+  - *Evidence*: `src/t2_kpxc_sync/kpxc.py` (`read_kdbx_direct`)
+- [x] **KDBX-04**: Полный регрессионный прогон набора автотестов (включая все tier-тесты).
+  - *Expected*: 100% тестов проходят успешно без ошибок и регрессий.
+  - *Evidence*: `python3 -m pytest` (406 passed)
+- [x] **KDBX-05**: Фиксация результатов прогона в артефакте ручного стенда.
+  - *Expected*: Стенд выполнен с машинной верификацией в `docs/testing/manual-<stamp>-v031-results.txt`.
+  - *Evidence*: `docs/testing/manual-20261117-v031-results.txt`
+
+
 
 
