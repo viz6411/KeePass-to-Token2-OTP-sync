@@ -16,6 +16,7 @@ from t2_kpxc_sync.models import TOTPEntry, Token2Profile
 from t2_kpxc_sync.token2 import Token2Adapter, Token2Error, Token2PINError
 from t2_kpxc_sync.tui import (
     apply_sync,
+    check_token_presence,
     display_diff_table,
     find_free_slots,
     handle_settings_menu,
@@ -525,3 +526,54 @@ def test_main_menu_keyboard_interrupt_handled():
         run_main_menu(AppConfig(), con=test_console)
     output = test_console.export_text()
     assert "Session interrupted by user" in output
+
+
+def test_check_token_presence():
+    """Verifies check_token_presence under connected, disconnected, and error conditions."""
+    # 1. Device with Token2 VID
+    with patch("hid.enumerate", return_value=[{"vendor_id": 0x349E, "product_id": 0x0022}]):
+        res = check_token_presence()
+        assert "Connected" in res
+
+    # 2. Device with Token2 string in manufacturer
+    with patch("hid.enumerate", return_value=[{"vendor_id": 0x1234, "manufacturer_string": "Token2 Sarl"}]):
+        res = check_token_presence()
+        assert "Connected" in res
+
+    # 3. No matching device
+    with patch("hid.enumerate", return_value=[{"vendor_id": 0x1234, "product_id": 0x5678}]):
+        res = check_token_presence()
+        assert "Not detected" in res
+
+    # 4. Exception in hid.enumerate
+    with patch("hid.enumerate", side_effect=RuntimeError("HID subsystem error")):
+        res = check_token_presence()
+        assert "Unknown" in res
+
+
+def test_render_header_panel_hardware_presence(tmp_path):
+    """Verifies render_header_panel correctly shows live hardware status and database status."""
+    from t2_kpxc_sync import __version__
+
+    db_file = tmp_path / "test.kdbx"
+    db_file.write_bytes(b"dummy")
+
+    cfg = AppConfig(keepassxc=KeePassXCConfig(database_path=str(db_file)))
+
+    with patch("t2_kpxc_sync.tui.check_token_presence", return_value="[bold green]Connected[/bold green]"):
+        panel = render_header_panel(cfg)
+        test_console = Console(record=True)
+        test_console.print(panel)
+        output = test_console.export_text()
+
+        assert f"v{__version__}" in output
+        assert "Connected" in output
+        assert str(db_file) in output
+
+    with patch("t2_kpxc_sync.tui.check_token_presence", return_value="[bold red]Not detected[/bold red]"):
+        panel = render_header_panel(cfg)
+        test_console = Console(record=True)
+        test_console.print(panel)
+        output = test_console.export_text()
+
+        assert "Not detected" in output

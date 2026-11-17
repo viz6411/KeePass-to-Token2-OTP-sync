@@ -7,6 +7,7 @@ Token2Adapter capable of automatic zero-external-CLI direct USB-HID communicatio
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from typing import Any, Self
 
@@ -277,7 +278,7 @@ class Token2Adapter:
                 self._direct_client.open()
                 return
             except (Token2DeviceNotFoundError, Token2TransportError) as err:
-                if self.backend == "auto":
+                if self.backend == "auto" and shutil.which(self.cli_binary) is not None:
                     self._direct_client = None
                     self._cli_adapter = Token2CLIAdapter(cli_binary=self.cli_binary, pin=self._pin_buf)
                     return

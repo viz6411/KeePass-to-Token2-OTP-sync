@@ -519,17 +519,79 @@ def test_hid_transport_mocked_calls():
 
 
 def test_adapter_auto_mode_fallback():
-    """Tests that Token2Adapter(backend='auto') falls back to CLI when USB device is not found."""
+    """Tests that Token2Adapter(backend='auto') falls back to CLI only when CLI binary exists."""
     from unittest.mock import patch
 
-    from t2_kpxc_sync.token2 import Token2Adapter
+    from t2_kpxc_sync.token2 import Token2Adapter, Token2Error
 
-    with patch("hid.enumerate", return_value=[]):
+    # Case 1: CLI binary exists -> fallback succeeds
+    with (
+        patch("hid.enumerate", return_value=[]),
+        patch("shutil.which", return_value="/usr/local/bin/token2-otp-cli"),
+    ):
         adapter = Token2Adapter(backend="auto", cli_binary="token2-otp-cli")
         adapter.open()
         assert adapter._cli_adapter is not None
         assert adapter._direct_client is None
         adapter.close()
+
+    # Case 2: CLI binary does NOT exist -> raises direct USB error, not CLI binary missing error
+    with (
+        patch("hid.enumerate", return_value=[]),
+        patch("shutil.which", return_value=None),
+    ):
+        adapter = Token2Adapter(backend="auto", cli_binary="token2-otp-cli")
+        with pytest.raises(Token2Error, match="Token2 direct USB connection failed: No Token2 device found"):
+            adapter.open()
+
+
+def test_hid_transport_multi_interface_candidate_fallback():
+    """Tests that HIDTransport iterates multiple candidate interfaces if the first raises an error."""
+    from unittest.mock import MagicMock, patch
+
+    from t2_kpxc_sync.token2 import HIDTransport, Token2TransportError
+
+    dev1_mock = MagicMock()
+    dev1_mock.open_path.side_effect = OSError("open failed: access denied (locked by OS WebAuthn)")
+
+    dev2_mock = MagicMock()
+    dev2_mock.open_path.return_value = None
+
+    created_devices = [dev1_mock, dev2_mock]
+
+    def mock_device_factory():
+        return created_devices.pop(0)
+
+    candidates = [
+        {"vendor_id": 0x349E, "product_id": 0x0022, "path": b"/dev/hidraw1"},  # Locked FIDO2
+        {"vendor_id": 0x349E, "product_id": 0x0022, "path": b"/dev/hidraw2"},  # Usable OTP
+    ]
+
+    with (
+        patch("hid.enumerate", return_value=candidates),
+        patch("hid.device", side_effect=mock_device_factory),
+    ):
+        transport = HIDTransport()
+        transport.open()
+        assert transport._dev is dev2_mock
+        dev1_mock.open_path.assert_called_once_with(b"/dev/hidraw1")
+        dev2_mock.open_path.assert_called_once_with(b"/dev/hidraw2")
+        transport.close()
+
+    # Case where all candidate interfaces fail
+    fail_mock1 = MagicMock()
+    fail_mock1.open_path.side_effect = OSError("Interface 1 busy")
+    fail_mock2 = MagicMock()
+    fail_mock2.open_path.side_effect = OSError("Interface 2 busy")
+    all_fail_devices = [fail_mock1, fail_mock2]
+
+    with (
+        patch("hid.enumerate", return_value=candidates),
+        patch("hid.device", side_effect=lambda: all_fail_devices.pop(0)),
+    ):
+        transport = HIDTransport()
+        with pytest.raises(Token2TransportError, match="Failed to open any Token2 USB-HID interface"):
+            transport.open()
 
 
 def test_protocol_status_word_edge_cases():

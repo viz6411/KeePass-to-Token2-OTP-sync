@@ -15,7 +15,10 @@ from .diff import compute_diff
 from .kpxc import KeePassXCError, read_kpxc_entries
 from .models import TOTPEntry, Token2Profile
 from .security import scrub_bytes
-from .token2 import Token2CLIAdapter, Token2Error, Token2PINError
+from .token2 import Token2Adapter, Token2Error, Token2PINError
+
+# Backwards compatibility alias for tests patching Token2CLIAdapter
+Token2CLIAdapter = Token2Adapter
 from .tui import (
     apply_sync,
     display_diff_table,
@@ -149,8 +152,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         # Query Token2
         console.print("[cyan]Connecting to Token2 hardware token...[/cyan]")
-        adapter = Token2CLIAdapter(cli_binary=cfg.token2.cli_binary, pin=pin_buf)
+        adapter = Token2CLIAdapter(
+            backend=getattr(cfg.token2, "backend", "auto"),
+            cli_binary=cfg.token2.cli_binary,
+            pin=pin_buf,
+        )
         try:
+            adapter.open()
             token_profiles = adapter.get_all()
         except Token2PINError as err:
             console.print(f"[bold red]Token2 Security Error: {err}[/bold red]")

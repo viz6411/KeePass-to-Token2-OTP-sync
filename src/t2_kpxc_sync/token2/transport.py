@@ -246,36 +246,60 @@ class HIDTransport(BaseTransport):
 
         target_path: bytes | None = self.device_path
 
-        if target_path is None:
-            # Enumerate USB devices matching VID/PID or manufacturer/product strings
-            devices = hid.enumerate()
-            for info in devices:
-                vid = info.get("vendor_id", 0)
-                pid = info.get("product_id", 0)
-                mfr = (info.get("manufacturer_string") or "").upper()
-                prod = (info.get("product_string") or "").upper()
+        if target_path is not None:
+            try:
+                dev = hid.device()
+                dev.open_path(target_path)
+                self._dev = dev
+                return
+            except Exception as err:
+                raise Token2TransportError(f"Failed to open Token2 USB-HID device at {target_path}: {err}") from err
 
-                matches_vid_pid = (vid == self.vendor_id and pid == self.product_id)
-                matches_descriptor = (
-                    TOKEN2_MANUFACTURER_KEYWORD in mfr or TOKEN2_PRODUCT_KEYWORD in prod
-                )
+        # Enumerate USB devices matching Token2 VID (0x349E) or descriptor keywords
+        devices = hid.enumerate()
+        candidates: list[dict[str, Any]] = []
+        for info in devices:
+            vid = info.get("vendor_id", 0)
+            pid = info.get("product_id", 0)
+            mfr = (info.get("manufacturer_string") or "").upper()
+            prod = (info.get("product_string") or "").upper()
 
-                if matches_vid_pid or matches_descriptor:
-                    target_path = info.get("path")
-                    break
+            matches_vid = (vid == self.vendor_id)
+            matches_vid_pid = (vid == self.vendor_id and pid == self.product_id)
+            matches_descriptor = (
+                TOKEN2_MANUFACTURER_KEYWORD in mfr or TOKEN2_PRODUCT_KEYWORD in prod
+            )
 
-        if target_path is None:
+            if matches_vid or matches_vid_pid or matches_descriptor:
+                candidates.append(info)
+
+        if not candidates:
             raise Token2DeviceNotFoundError(
                 f"No Token2 device found (VID=0x{self.vendor_id:04X}, PID=0x{self.product_id:04X}). "
                 "Ensure device is connected and appropriate udev rules (on Linux) are configured."
             )
 
-        try:
-            dev = hid.device()
-            dev.open_path(target_path)
-            self._dev = dev
-        except Exception as err:
-            raise Token2TransportError(f"Failed to open Token2 USB-HID device: {err}") from err
+        # Try opening candidate devices / interfaces sequentially.
+        # Composite FIDO2/OTP tokens expose multiple HID interfaces (e.g. FIDO2 usage_page 0xF1D0,
+        # vendor OTP usage_page 0xFF00). On Windows, the FIDO2 interface is exclusively locked by
+        # the OS WebAuthn service. Iterating all candidates ensures we bind to the openable OTP interface.
+        open_errors: list[str] = []
+        for cand in candidates:
+            cand_path = cand.get("path")
+            if not cand_path:
+                continue
+            try:
+                dev = hid.device()
+                dev.open_path(cand_path)
+                self._dev = dev
+                return
+            except Exception as err:
+                open_errors.append(f"{cand_path}: {err}")
+                continue
+
+        raise Token2TransportError(
+            f"Failed to open any Token2 USB-HID interface ({len(candidates)} candidate(s) found): {'; '.join(open_errors)}"
+        )
 
     def close(self) -> None:
         """Closes the USB-HID device."""

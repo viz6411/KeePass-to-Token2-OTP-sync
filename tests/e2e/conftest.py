@@ -488,7 +488,7 @@ def mock_token2_hid(
         from t2_kpxc_sync.token2 import Token2Adapter
         monkeypatch.setattr(
             "t2_kpxc_sync.cli.Token2CLIAdapter",
-            lambda cli_binary="token2-otp-cli", pin=None: Token2Adapter(backend="direct", pin=pin),
+            lambda *args, **kwargs: Token2Adapter(backend="direct", pin=kwargs.get("pin")),
             raising=False,
         )
 

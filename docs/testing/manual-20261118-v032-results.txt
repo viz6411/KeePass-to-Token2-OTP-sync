@@ -1,0 +1,43 @@
+=== MANUAL TEST STAND VERIFICATION REPORT (v0.3.2 HOTFIX) ===
+Timestamp: 2026-11-18 02:05:00 UTC
+Platform: Linux 6.6.137+ / x86_64
+Target Version: 0.3.2
+Test Scope: Token2 Multi-Interface USB-HID Candidate Iteration, Safe Direct Error Propagation, and Live TUI Hardware Status
+
+[CHECK 1] Multi-Interface Candidate Iteration (Windows WebAuthn / Composite HID)
+Command: python3 -m pytest tests/test_token2_protocol.py::test_hid_transport_multi_interface_candidate_fallback -v
+Result: PASSED
+Details:
+- Interface 1 (FIDO2 usage_page 0xF1D0): simulated OSError("open failed: access denied (locked by OS WebAuthn)")
+- Interface 2 (Vendor OTP usage_page 0xFF00): successfully opened via hid.device().open_path()
+- Verified transport successfully binds to openable interface without aborting session.
+- Verified all-fail condition raises Token2TransportError with diagnostic report.
+
+[CHECK 2] Safe Direct Error Propagation (No Phantom CLI Error)
+Command: python3 -m pytest tests/test_token2_protocol.py::test_adapter_auto_mode_fallback -v
+Result: PASSED
+Details:
+- Case 1: shutil.which("token2-otp-cli") is "/usr/local/bin/token2-otp-cli" -> fallback to Token2CLIAdapter succeeds.
+- Case 2: shutil.which("token2-otp-cli") is None -> raises Token2Error("Token2 direct USB connection failed: No Token2 device found...").
+- Verified Token2 CLI binary not found error is NEVER raised when the binary does not exist on disk.
+
+[CHECK 3] Live TUI Hardware Status & Dynamic Version
+Command: python3 -m pytest tests/test_tui.py::test_check_token_presence tests/test_tui.py::test_render_header_panel_hardware_presence -v
+Result: PASSED
+Details:
+- check_token_presence() returns "[bold green]Connected[/bold green]" when Token2 USB-HID device matches VID 0x349E or descriptor keyword "TOKEN2".
+- check_token_presence() returns "[bold red]Not detected[/bold red]" when no Token2 hardware is present.
+- check_token_presence() returns "[yellow]Unknown[/yellow]" gracefully on HID subsystem errors.
+- render_header_panel() displays "Hardware: Token2 PIN+ ([bold green]Connected[/bold green])" and "v0.3.2 • Standalone".
+
+[CHECK 4] Config Backend Support
+Command: python3 -c "from t2_kpxc_sync.config import load_config, save_config, AppConfig, Token2Config; cfg = AppConfig(token2=Token2Config(backend='direct')); save_config(cfg, '/tmp/test_cfg.toml'); loaded = load_config('/tmp/test_cfg.toml'); assert loaded.token2.backend == 'direct'; print('Config backend verified!')"
+Result: Config backend verified!
+
+[CHECK 5] Architecture Diagram Synchronization (Archify Invariant)
+Command: /home/viz/.local/bin/node /home/viz/.gemini/config/skills/archify/bin/archify.mjs deliver architecture docs/architecture.json docs/architecture.html --quality showcase
+Result: delivered architecture docs/architecture.html (9/9 artifact checks; composition showcase: pass; sha256 4681455c7e33)
+
+[CHECK 6] End-to-End Test Suite Execution
+Result: 409 passed in pytest full suite.
+=== END OF REPORT ===

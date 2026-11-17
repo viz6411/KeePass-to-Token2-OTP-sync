@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from . import __version__
 from .config import (
     AppConfig,
     KeePassXCConfig,
@@ -412,7 +413,23 @@ def run_onboarding_wizard(
     return new_config
 
 
-def render_header_panel(config: AppConfig, token_status: str = "Ready") -> Panel:
+def check_token_presence() -> str:
+    """Checks whether a Token2 USB-HID device is currently detected."""
+    try:
+        import hid
+        devices = hid.enumerate()
+        for info in devices:
+            vid = info.get("vendor_id", 0)
+            mfr = (info.get("manufacturer_string") or "").upper()
+            prod = (info.get("product_string") or "").upper()
+            if vid == 0x349E or "TOKEN2" in mfr or "TOKEN2" in prod:
+                return "[bold green]Connected[/bold green]"
+        return "[bold red]Not detected[/bold red]"
+    except Exception:
+        return "[yellow]Unknown[/yellow]"
+
+
+def render_header_panel(config: AppConfig, token_status: Optional[str] = None) -> Panel:
     """Renders the top branding panel for the main menu."""
     db_path = config.keepassxc.database_path
     if not db_path:
@@ -422,10 +439,11 @@ def render_header_panel(config: AppConfig, token_status: str = "Ready") -> Panel
     else:
         db_status = f"[bold yellow]{db_path} (file not found!)[/bold yellow]"
 
-    content = f"Database: {db_status} | Hardware: Token2 PIN+ {token_status}"
+    status = token_status if token_status is not None else check_token_presence()
+    content = f"Database: {db_status} | Hardware: Token2 PIN+ ({status})"
     return Panel(
         content,
-        title="[bold cyan]KeePassXC to Token2 PIN+ R3.3 Synchronization[/bold cyan]\n[dim]v0.2.0 • Standalone[/dim]",
+        title=f"[bold cyan]KeePassXC to Token2 PIN+ R3.3 Synchronization[/bold cyan]\n[dim]v{__version__} • Standalone[/dim]",
         border_style="cyan",
     )
 
@@ -508,7 +526,7 @@ def handle_sync_action(
         # 2. Query Token2 hardware token
         c.print("[cyan]Connecting to Token2 hardware token...[/cyan]")
         adapter = Token2Adapter(
-            backend="auto",
+            backend=getattr(config.token2, "backend", "auto"),
             cli_binary=config.token2.cli_binary,
             pin=pin_buf,
         )

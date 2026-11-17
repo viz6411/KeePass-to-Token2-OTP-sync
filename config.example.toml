@@ -15,6 +15,9 @@ cli_binary = "keepassxc-cli"
 excluded_groups = ["Recycle Bin", "Archive"]
 
 [token2]
+# Token2 communication backend: "auto" (direct USB-HID primary, CLI fallback if installed), "direct" (pure USB-HID), or "cli"
+backend = "auto"
+
 # CLI binary name or absolute path (legacy fallback)
 cli_binary = "token2-otp-cli"
 

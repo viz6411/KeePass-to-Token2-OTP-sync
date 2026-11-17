@@ -223,6 +223,31 @@
   - *Expected*: Стенд выполнен с машинной верификацией в `docs/testing/manual-<stamp>-v031-results.txt`.
   - *Evidence*: `docs/testing/manual-20261117-v031-results.txt`
 
+---
+
+## 13. Верификация хотфикса v0.3.2 (Robust Multi-Interface USB-HID Detection & Live TUI Hardware Status)
+- [x] **T2-01**: Последовательный перебор интерфейсов составного USB-HID устройства в `HIDTransport.open()`.
+  - *Expected*: Если ОС (например, Windows WebAuthn) монопольно блокирует интерфейс FIDO2 (`open_path` вызывает access denied / open failed), транспорт перехватывает ошибку и пробует следующие интерфейсы, успешно открывая интерфейс вендорного OTP.
+  - *Evidence*: `src/t2_kpxc_sync/token2/transport.py`, `tests/test_token2_protocol.py::test_hid_transport_multi_interface_candidate_fallback`
+- [x] **T2-02**: Защита от ложного падения с ошибкой отсутствия внешнего CLI бинарника в `Token2Adapter.open()`.
+  - *Expected*: В режиме `backend="auto"` фоллбэк на `Token2CLIAdapter` инициируется исключительно при фактическом наличии исполняемого файла `token2-otp-cli` в системе (`shutil.which is not None`). При его отсутствии сохраняется и возвращается детальная ошибка прямого USB подключения без маскировки.
+  - *Evidence*: `src/t2_kpxc_sync/token2/adapter.py`, `tests/test_token2_protocol.py::test_adapter_auto_mode_fallback`
+- [x] **T2-03**: Унифицированное использование `Token2Adapter` в `cli.py` и `tui.py`.
+  - *Expected*: `cli.py` и `tui.py` используют единый `Token2Adapter` с поддержкой прямого USB-HID и конфигурационного выбора бэкенда (`auto`, `direct`, `cli`).
+  - *Evidence*: `src/t2_kpxc_sync/cli.py`, `src/t2_kpxc_sync/tui.py`
+- [x] **T2-04**: Отображение динамического статуса подключения аппаратного токена Token2 в заголовке TUI.
+  - *Expected*: В главном меню в панели `render_header_panel` в реальном времени отображается `Hardware: Token2 PIN+ ([bold green]Connected[/bold green])` или `([bold red]Not detected[/bold red])`, а также актуальная версия `v0.3.2`.
+  - *Evidence*: `src/t2_kpxc_sync/tui.py` (`check_token_presence`, `render_header_panel`), `tests/test_tui.py::test_check_token_presence`, `tests/test_tui.py::test_render_header_panel_hardware_presence`
+- [x] **T2-05**: Конфигурационный параметр `backend` в `Token2Config` и `config.example.toml`.
+  - *Expected*: `backend = "auto"` поддерживается в TOML конфигурации с возможностью принудительного задания `"direct"` или `"cli"`.
+  - *Evidence*: `src/t2_kpxc_sync/config.py`, `config.example.toml`
+- [x] **T2-06**: Полный регрессионный прогон всего набора тестов (409 тестов).
+  - *Expected*: 100% тестов проходят успешно.
+  - *Evidence*: `python3 -m pytest` (409 passed)
+- [x] **T2-07**: Фиксация результатов прогона в артефакте ручного стенда.
+  - *Expected*: Машинная верификация зафиксирована в `docs/testing/manual-20261118-v032-results.txt`.
+  - *Evidence*: `docs/testing/manual-20261118-v032-results.txt`
+
 
 
 
